@@ -1,0 +1,54 @@
+-- +goose NO TRANSACTION
+-- +goose Up
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_users_email_unique ON users (email);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_users_identity_id ON users (identity_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_user_accounts_providers_account ON user_accounts (provider_id, account_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_user_accounts_user_provider ON user_accounts (user_id, provider_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_email_unique ON customers (email);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_identity_id ON customers (identity_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_customer_accounts_providers_account ON customer_accounts (provider_id, account_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_customer_customer_provider ON customer_accounts (customer_id, provider_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_sessions_token_unique ON sessions (token);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sessions_identity_id ON sessions (identity_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_session_expires_at ON sessions (expires_at);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organizations_parent_id ON organizations (parent_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_organizations_slug_unique ON organizations (slug);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_type ON organizations (type);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_members_identity_id ON members (identity_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_members_organization_id ON members (organization_id);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_members_identity_organization ON members (identity_id, organization_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_roles_organization_id ON roles (organization_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_roles_organization_type ON roles (organization_type);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_roles_slug_unique ON roles (slug, COALESCE(organization_id, '00000000-0000-0000-0000-000000000000'::uuid));
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_member_roles_role_id ON member_roles (role_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_addresses_organization_id ON addresses (organization_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_addresses_defaults ON addresses (organization_id, is_default_shipping, is_default_billing);
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_addresses_default_shipping ON addresses (organization_id) WHERE is_default_shipping = TRUE;
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_addresses_default_billing ON addresses (organization_id) WHERE is_default_billing = TRUE;
+
+-- +goose Down
+DROP INDEX CONCURRENTLY IF EXISTS uq_addresses_default_billing;
+DROP INDEX CONCURRENTLY IF EXISTS uq_addresses_default_shipping;
+DROP INDEX CONCURRENTLY IF EXISTS idx_addresses_defaults;
+DROP INDEX CONCURRENTLY IF EXISTS idx_addresses_organization_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_member_roles_role_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_roles_slug_unique;
+DROP INDEX CONCURRENTLY IF EXISTS idx_roles_organization_type;
+DROP INDEX CONCURRENTLY IF EXISTS idx_roles_organization_id;
+DROP INDEX CONCURRENTLY IF EXISTS uq_members_identity_organization;
+DROP INDEX CONCURRENTLY IF EXISTS idx_members_organization_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_members_identity_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_organization_type;
+DROP INDEX CONCURRENTLY IF EXISTS idx_organizations_slug_unique;
+DROP INDEX CONCURRENTLY IF EXISTS idx_organizations_parent_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_session_expires_at;
+DROP INDEX CONCURRENTLY IF EXISTS idx_sessions_identity_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_sessions_token_unique;
+DROP INDEX CONCURRENTLY IF EXISTS uq_customer_customer_provider;
+DROP INDEX CONCURRENTLY IF EXISTS uq_customer_accounts_providers_account;
+DROP INDEX CONCURRENTLY IF EXISTS idx_customers_identity_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_customers_email_unique;
+DROP INDEX CONCURRENTLY IF EXISTS uq_user_accounts_user_provider;
+DROP INDEX CONCURRENTLY IF EXISTS uq_user_accounts_providers_account;
+DROP INDEX CONCURRENTLY IF EXISTS idx_users_identity_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_users_email_unique;
