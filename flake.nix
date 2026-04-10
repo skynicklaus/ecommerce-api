@@ -24,13 +24,16 @@
             delve
             gofumpt
             goimports-reviser
-            go-tools
+            gotools
             golines
             gomodifytags
+            golangci-lint-langserver
             golangci-lint
             air
             sqlc
             goose
+            postgres-language-server
+            sqlfluff
           ];
         };
       }
