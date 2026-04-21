@@ -239,10 +239,26 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_addresses_updated_at
 BEFORE UPDATE ON addresses
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE OR REPLACE FUNCTION protect_platform_org()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.type = 'platform' THEN
+        RAISE EXCEPTION 'Platform organization cannot be modified or deleted';
+    END IF;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_protect_platform_org
+BEFORE UPDATE OR DELETE ON organizations
+FOR EACH ROW EXECUTE FUNCTION protect_platform_org();
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TRIGGER IF EXISTS trg_protect_platform_org ON organizations;
+DROP FUNCTION IF EXISTS protect_platform_org() CASCADE;
 DROP TRIGGER IF EXISTS trg_addresses_updated_at ON addresses;
 DROP TRIGGER IF EXISTS trg_roles_updated_at ON roles;
 DROP TRIGGER IF EXISTS trg_customer_accounts_updated_at ON customer_accounts;
