@@ -15,8 +15,8 @@ import (
 func createRandomCategory(t *testing.T) db.Category {
 	n := util.CoinFlip(t)
 
-	var organizationID *uuid.UUID = nil
-	var description *string = nil
+	var organizationID *uuid.UUID
+	var description *string
 	if n == 1 {
 		organization := createRandomOrganization(t)
 		organizationID = &organization.ID

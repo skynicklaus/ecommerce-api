@@ -20,7 +20,7 @@ func randomAssignRoleToMember(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, n)
 
-	var uuid *uuid.UUID = nil
+	var uuid *uuid.UUID
 	if n.Int64() == 1 {
 		oldMember := createRandomMember(t)
 		uuid = &oldMember.ID

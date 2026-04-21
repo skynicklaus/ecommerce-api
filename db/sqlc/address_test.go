@@ -13,7 +13,7 @@ import (
 
 func createRandomAddressWithOrg(t *testing.T, organization db.Organization) db.Address {
 	n := util.CoinFlip(t)
-	var line2 *string = nil
+	var line2 *string
 	if n == 1 {
 		line2 = util.GetRandomStringPtr(t, 8)
 	}

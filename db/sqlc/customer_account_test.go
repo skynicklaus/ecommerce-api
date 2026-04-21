@@ -24,13 +24,13 @@ func createRandomCustomerAccount(t *testing.T) db.CreateCustomerAccountRow {
 	require.NotEmpty(t, provider)
 
 	var accountID string
-	var hashedPassword *string = nil
-	var accessToken *string = nil
-	var accessTokenExpiresAt *time.Time = nil
-	var refreshToken *string = nil
-	var refreshTokenExpiresAt *time.Time = nil
-	var scope *string = nil
-	var idToken *string = nil
+	var hashedPassword *string
+	var accessToken *string
+	var accessTokenExpiresAt *time.Time
+	var refreshToken *string
+	var refreshTokenExpiresAt *time.Time
+	var scope *string
+	var idToken *string
 	if provider == "credential" {
 		accountID = customer.ID.String()
 		hashedPassword = util.GetRandomHashedPassword(t, 10)
