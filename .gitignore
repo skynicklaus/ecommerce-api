@@ -34,3 +34,7 @@ main
 
 # direnv
 .direnv
+
+# garage
+infra/garage/data
+garage.toml
