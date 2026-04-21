@@ -13,10 +13,17 @@ INSERT INTO roles (role_name, organization_id, organization_type, slug, is_syste
 , ('buyer', NULL, 'company', 'company.buyer', TRUE)
 , ('finance', NULL, 'company', 'company.finance', TRUE)
 ON CONFLICT DO NOTHING;
+
+INSERT INTO organizations (name, slug, type, status)
+VALUES ('Platform', 'platform', 'platform', 'active');
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE organizations DISABLE TRIGGER trg_protect_platform_org;
+DELETE FROM organizations
+WHERE slug = 'platform';
+ALTER TABLE organizations ENABLE TRIGGER trg_protect_platform_org;
 DELETE FROM roles
 WHERE is_system = TRUE;
 -- +goose StatementEnd
