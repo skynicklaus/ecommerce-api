@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/go-openapi/testify/v2/require"
 
@@ -118,4 +119,38 @@ func TestCreateSubOrganization(t *testing.T) {
 	} else {
 		require.Empty(t, chilldOrganization.Metadata)
 	}
+}
+
+func TestGetOrganizationByID(t *testing.T) {
+	organization1 := createRandomOrganization(t)
+
+	organization2, err := testStore.GetOrganizationByID(context.Background(), organization1.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, organization2)
+
+	require.Equal(t, organization1.ID, organization2.ID)
+	require.Equal(t, organization1.ParentID, organization2.ParentID)
+	require.Equal(t, organization1.Name, organization2.Name)
+	require.Equal(t, organization1.Slug, organization2.Slug)
+	require.Equal(t, organization1.Type, organization2.Type)
+	require.Equal(t, organization1.Logo, organization2.Logo)
+	require.Equal(t, organization1.Status, organization2.Status)
+	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, time.Second)
+}
+
+func TestGetOrganizationBySlug(t *testing.T) {
+	organization1 := createRandomOrganization(t)
+
+	organization2, err := testStore.GetOrganizationBySlug(context.Background(), organization1.Slug)
+	require.NoError(t, err)
+	require.NotEmpty(t, organization2)
+
+	require.Equal(t, organization1.ID, organization2.ID)
+	require.Equal(t, organization1.ParentID, organization2.ParentID)
+	require.Equal(t, organization1.Name, organization2.Name)
+	require.Equal(t, organization1.Slug, organization2.Slug)
+	require.Equal(t, organization1.Type, organization2.Type)
+	require.Equal(t, organization1.Logo, organization2.Logo)
+	require.Equal(t, organization1.Status, organization2.Status)
+	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, time.Second)
 }
