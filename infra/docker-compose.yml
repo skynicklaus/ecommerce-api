@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:18
+    container_name: ecommerce-db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+  dragonflydb:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly
+    container_name: ecomerce-cache
+    network_mode: host
+    ulimits:
+      memlock: -1
+    volumes:
+      - dragonfly_data:/data
+  garage:
+    image: dxflrs/garage:v2.3.0
+    container_name: ecommerce-s3
+    command: /garage server --single-node --default-bucket
+    environment:
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_DEFAULT_ACCESS_KEY}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_DEFAULT_SECRET_KEY}
+      GARAGE_DEFAULT_BUCKET: ${GARAGE_DEFAULT_BUCKET}
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml
+      - ./garage/data:/var/lib/garage
+    ports:
+      - "3900:3900"
+      - "3901:3901"
+      - "3902:3902"
+      - "3903:3903"
+
+volumes:
+  postgres_data:
+  dragonfly_data:
