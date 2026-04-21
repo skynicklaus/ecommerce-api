@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/skynicklaus/ecommerce-api/internal/password"
 )
 
 func GetRandomIdentityType(t *testing.T) string {
@@ -129,7 +131,7 @@ func GetRandomOrganizationStatus(t *testing.T) string {
 func GetRandomHashedPassword(t *testing.T, length int) *string {
 	t.Helper()
 
-	hashedPassword, err := HashPassword(GetRandomString(t, length))
+	hashedPassword, err := password.HashPassword(GetRandomString(t, length))
 	if err != nil {
 		t.Fatalf("failed to hash password: %v\n", err)
 	}
