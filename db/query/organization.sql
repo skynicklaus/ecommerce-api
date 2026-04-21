@@ -24,3 +24,19 @@ FROM organizations
 WHERE id = $1
 ORDER BY id
 LIMIT 1;
+
+-- name: GetOrganizationBySlug :one
+SELECT
+    id
+    , parent_id
+    , name
+    , slug
+    , status
+    , type
+    , logo
+    , metadata
+    , created_at
+FROM organizations
+WHERE slug = $1
+ORDER BY id
+LIMIT 1;

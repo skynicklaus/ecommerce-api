@@ -89,3 +89,37 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organi
 	)
 	return i, err
 }
+
+const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
+SELECT
+    id
+    , parent_id
+    , name
+    , slug
+    , status
+    , type
+    , logo
+    , metadata
+    , created_at
+FROM organizations
+WHERE slug = $1
+ORDER BY id
+LIMIT 1
+`
+
+func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error) {
+	row := q.db.QueryRow(ctx, getOrganizationBySlug, slug)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.ParentID,
+		&i.Name,
+		&i.Slug,
+		&i.Status,
+		&i.Type,
+		&i.Logo,
+		&i.Metadata,
+		&i.CreatedAt,
+	)
+	return i, err
+}
