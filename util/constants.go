@@ -16,6 +16,14 @@ const (
 	OrganizationTypeCompany    OrganizationType = "company"
 )
 
+type OrganizationStatus string
+
+const (
+	OrganizationStatusPending   OrganizationStatus = "pending"
+	OrganizationStatusActive    OrganizationStatus = "active"
+	OrganizationStatusSuspended OrganizationStatus = "suspended"
+)
+
 type ProviderID string
 
 const (
