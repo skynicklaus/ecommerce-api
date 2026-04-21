@@ -23,6 +23,21 @@ WHERE id = $1
 ORDER BY id
 LIMIT 1;
 
+-- name: GetRoleBySlug :one
+SELECT
+    id
+    , role_name
+    , organization_id
+    , organization_type
+    , slug
+    , is_system
+    , created_at
+    , updated_at
+FROM roles
+WHERE slug = $1
+ORDER BY id
+LIMIT 1;
+
 -- name: ListOrganizationRolesByType :many
 SELECT
     id

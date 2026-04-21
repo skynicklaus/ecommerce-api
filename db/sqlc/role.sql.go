@@ -84,6 +84,38 @@ func (q *Queries) GetRoleByID(ctx context.Context, id int16) (Role, error) {
 	return i, err
 }
 
+const getRoleBySlug = `-- name: GetRoleBySlug :one
+SELECT
+    id
+    , role_name
+    , organization_id
+    , organization_type
+    , slug
+    , is_system
+    , created_at
+    , updated_at
+FROM roles
+WHERE slug = $1
+ORDER BY id
+LIMIT 1
+`
+
+func (q *Queries) GetRoleBySlug(ctx context.Context, slug string) (Role, error) {
+	row := q.db.QueryRow(ctx, getRoleBySlug, slug)
+	var i Role
+	err := row.Scan(
+		&i.ID,
+		&i.RoleName,
+		&i.OrganizationID,
+		&i.OrganizationType,
+		&i.Slug,
+		&i.IsSystem,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listOrganizationRolesByType = `-- name: ListOrganizationRolesByType :many
 SELECT
     id
