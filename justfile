@@ -11,3 +11,9 @@ migrateup:
 migratedown:
     @echo "Full migrate down..."
     goose down-to 0
+composeup:
+    @echo "docker compose up..."
+    docker-compose -f ./infra/docker-compose.yml up -d
+composedown:
+    @echo "docker compose down..."
+    docker-compose -f ./infra/docker-compose.yml down -v
