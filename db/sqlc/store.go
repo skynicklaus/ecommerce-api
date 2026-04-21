@@ -9,7 +9,22 @@ import (
 type Store interface {
 	Querier
 
-	RegistrationTx(ctx context.Context, arg RegistrationTxParams) (RegistrationTxResults, error)
+	CustomerRegistrationTx(
+		context.Context,
+		CustomerRegistrationTxParams,
+	) (CustomerRegistrationTxResults, error)
+	PlatformUserRegistrationTx(
+		context.Context,
+		PlatformUserRegistrationTxParams,
+	) (PlatformUserRegistrationTxResults, error)
+	UserRegistrationTx(
+		context.Context,
+		UserRegistrationTxParams,
+	) (UserRegistrationTxResults, error)
+	CreateOrganizationTx(
+		context.Context,
+		CreateOrganizationTxRequest,
+	) (CreateOrganizationTxResponse, error)
 }
 
 type SQLStore struct {
