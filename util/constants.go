@@ -39,3 +39,11 @@ const (
 	AddressWarehouse AddressType = "warehouse"
 	AddressGeneral   AddressType = "general"
 )
+
+type ProductAssetType string
+
+const (
+	ProductAssetImage    ProductAssetType = "image"
+	ProductAssetVideo    ProductAssetType = "video"
+	ProductAssetDocument ProductAssetType = "document"
+)
