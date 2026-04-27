@@ -34,6 +34,9 @@
             goose
             postgres-language-server
             sqlfluff
+            vips
+            pkg-config
+            ffmpeg
           ];
         };
       }
