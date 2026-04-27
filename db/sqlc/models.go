@@ -141,16 +141,16 @@ type Product struct {
 }
 
 type ProductAsset struct {
-	ID               int64     `json:"id"`
-	ProductID        uuid.UUID `json:"product_id"`
-	ProductVariantID uuid.UUID `json:"product_variant_id"`
-	AssetKey         string    `json:"asset_key"`
-	Type             string    `json:"type"`
-	MimeType         string    `json:"mime_type"`
-	AltText          *string   `json:"alt_text"`
-	SortOrder        int16     `json:"sort_order"`
-	IsPrimary        bool      `json:"is_primary"`
-	DurationSeconds  *int16    `json:"duration_seconds"`
+	ID               int64      `json:"id"`
+	ProductID        uuid.UUID  `json:"product_id"`
+	ProductVariantID *uuid.UUID `json:"product_variant_id"`
+	AssetKey         string     `json:"asset_key"`
+	Type             string     `json:"type"`
+	MimeType         string     `json:"mime_type"`
+	AltText          *string    `json:"alt_text"`
+	SortOrder        int16      `json:"sort_order"`
+	IsPrimary        bool       `json:"is_primary"`
+	DurationSeconds  *int16     `json:"duration_seconds"`
 }
 
 type ProductVariant struct {
