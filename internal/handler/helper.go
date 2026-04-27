@@ -1,37 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
-	"github.com/skynicklaus/ecommerce-api/internal/validation"
+	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+	"github.com/skynicklaus/ecommerce-api/internal/middleware"
 )
-
-type APIError struct {
-	StatusCode int                     `json:"statusCode"`
-	Message    string                  `json:"message"`
-	Fields     []validation.FieldError `json:"fields,omitempty"`
-}
-
-func NewAPIError(statusCode int, message string, err error) APIError {
-	return APIError{
-		StatusCode: statusCode,
-		Message:    err.Error(),
-		Fields:     validation.ParseValidationError(err),
-	}
-}
-
-func (e APIError) Error() string {
-	return e.Message
-}
-
-func errInvalidJSON() APIError {
-	return NewAPIError(http.StatusBadRequest, "invalid json request", nil)
-}
-
-func errValidation(err error) APIError {
-	return NewAPIError(http.StatusUnprocessableEntity, "validation error", err)
-}
 
 func WriteJSON(w http.ResponseWriter, statusCode int, v any) error {
 	w.WriteHeader(statusCode)
@@ -47,4 +24,13 @@ func WriteText(w http.ResponseWriter, statusCode int, v string) error {
 
 func decodeJSON[T any](r *http.Request, req *T) error {
 	return json.NewDecoder(r.Body).Decode(req)
+}
+
+func organizationFromCtx(ctx context.Context) (db.Organization, error) {
+	organization, ok := ctx.Value(middleware.OrganizationContextKey{}).(db.Organization)
+	if !ok {
+		return db.Organization{}, errors.New("invalid organization")
+	}
+
+	return organization, nil
 }
