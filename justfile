@@ -17,3 +17,6 @@ composeup:
 composedown:
     @echo "docker compose down..."
     docker-compose -f ./infra/docker-compose.yml down -v
+composestop:
+    @echo "docker stopping services..."
+    docker-compose stop
