@@ -10,7 +10,9 @@ import (
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-chi/traceid"
 
+	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/handler"
+	midware "github.com/skynicklaus/ecommerce-api/internal/middleware"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -37,7 +39,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 		},
 	}))
 
-	v1Handler := handler.NewV1Handler(s.store, s.logger, s.redis)
+	midware := midware.New(s.store)
+
+	v1Handler := handler.NewV1Handler(s.store, s.logger, s.redis, s.storage)
 
 	r.Get("/health", s.make(func(w http.ResponseWriter, _ *http.Request) error {
 		return handler.WriteText(w, http.StatusOK, "OK")
@@ -47,6 +51,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Post("/users/platform", s.make(v1Handler.PlatformUserCredentialRegistration))
 		r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
+
+		r.Group(func(r chi.Router) {
+			r.Use(midware.VaslidateOrganization)
+
+			r.Post("/product-assets", s.make(v1Handler.PreUploadAssets))
+		})
 	})
 
 	return r
@@ -66,7 +76,7 @@ func (s *Server) make(h APIFunc) http.HandlerFunc {
 }
 
 func (s *Server) handleError(w http.ResponseWriter, err error) {
-	if apiErr, ok := errors.AsType[handler.APIError](err); ok {
+	if apiErr, ok := errors.AsType[apierror.APIError](err); ok {
 		if writeErr := handler.WriteJSON(w, apiErr.StatusCode, apiErr); writeErr != nil {
 			s.logger.Error("failed to write response", slog.Any("err", writeErr))
 		}
