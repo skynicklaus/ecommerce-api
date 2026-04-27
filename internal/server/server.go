@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -9,6 +11,7 @@ import (
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/internal/cache"
+	"github.com/skynicklaus/ecommerce-api/internal/storage"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
@@ -20,10 +23,11 @@ const (
 )
 
 type Server struct {
-	port   int
-	logger *util.ServerLogger
-	store  db.Store
-	redis  *cache.RedisClient
+	port    int
+	logger  *util.ServerLogger
+	store   db.Store
+	redis   *cache.RedisClient
+	storage *storage.S3Storage
 }
 
 func NewServer(store db.Store, logger *util.ServerLogger) *http.Server {
@@ -34,11 +38,17 @@ func NewServer(store db.Store, logger *util.ServerLogger) *http.Server {
 
 	redis := cache.NewRedis(store, logger)
 
+	storage, err := storage.New(context.Background())
+	if err != nil {
+		logger.Fatal("failed to initialize s3 storage client", slog.Any("err", err))
+	}
+
 	newServer := &Server{
-		port:   port,
-		logger: logger,
-		store:  store,
-		redis:  redis,
+		port:    port,
+		logger:  logger,
+		store:   store,
+		redis:   redis,
+		storage: storage,
 	}
 
 	return &http.Server{
