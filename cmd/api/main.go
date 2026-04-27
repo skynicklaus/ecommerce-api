@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
@@ -23,6 +24,12 @@ const (
 
 func main() {
 	logger := util.NewLogger()
+
+	err := vips.Startup(nil)
+	if err != nil {
+		logger.Fatal("failed to start libvips", slog.Any("err", err))
+	}
+	defer vips.Shutdown()
 
 	slog.SetDefault(logger.Logger)
 	slog.SetLogLoggerLevel(slog.LevelError)
