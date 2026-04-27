@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/cache"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
@@ -29,11 +30,11 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 
 	req := new(CreateOrganizationRequest)
 	if err := decodeJSON(r, req); err != nil {
-		return errInvalidJSON()
+		return apierror.ErrInvalidJSON()
 	}
 
 	if err := h.validate(req); err != nil {
-		return errValidation(err)
+		return apierror.ErrValidation(err)
 	}
 
 	role, err := getRoleFromSlug(ctx, h.cache, req.Type, req.RoleSlug)
@@ -42,7 +43,7 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 	}
 
 	if req.Type != role.OrganizationType {
-		return NewAPIError(http.StatusBadRequest, "organization type mismatch", nil)
+		return apierror.NewAPIError(http.StatusBadRequest, errors.New("organization type mismatch"))
 	}
 
 	txResult, err := h.store.CreateOrganizationTx(ctx, db.CreateOrganizationTxRequest{

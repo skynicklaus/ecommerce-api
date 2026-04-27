@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/cache"
 	"github.com/skynicklaus/ecommerce-api/internal/password"
 	"github.com/skynicklaus/ecommerce-api/util"
@@ -35,11 +36,11 @@ func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Re
 
 	req := new(UserCredentialRegistrationRequest)
 	if err := decodeJSON(r, req); err != nil {
-		return errInvalidJSON()
+		return apierror.ErrInvalidJSON()
 	}
 
 	if err := h.validate(req); err != nil {
-		return errValidation(err)
+		return apierror.ErrValidation(err)
 	}
 
 	hashedPassword, err := password.HashPassword(req.Password)
@@ -67,7 +68,7 @@ func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		errCode := db.ErrorCode(err)
 		if errCode == db.UniqueViolation {
-			return NewAPIError(http.StatusConflict, "email is taken", nil)
+			return apierror.NewAPIError(http.StatusConflict, errors.New("email is taken"))
 		}
 
 		return err
@@ -86,24 +87,27 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 
 	req := new(UserCredentialRegistrationRequest)
 	if err := decodeJSON(r, req); err != nil {
-		return errInvalidJSON()
+		return apierror.ErrInvalidJSON()
 	}
 
 	if err := h.validate(req); err != nil {
-		return errValidation(err)
+		return apierror.ErrValidation(err)
 	}
 
 	role, err := h.cache.GetSystemPlatformRoleFromSlug(ctx, req.RoleSlug)
 	if err != nil {
 		if errors.Is(err, db.ErrNotFound) {
-			return NewAPIError(http.StatusBadRequest, "invalid role", nil)
+			return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid role"))
 		}
 
 		return err
 	}
 
 	if role.OrganizationType != string(util.OrganizationTypePlatform) {
-		return NewAPIError(http.StatusBadRequest, "invalid role organization type", nil)
+		return apierror.NewAPIError(
+			http.StatusBadRequest,
+			errors.New("invalid role organization type"),
+		)
 	}
 
 	hashedPassword, err := password.HashPassword(req.Password)
@@ -159,11 +163,11 @@ func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *htt
 
 	req := new(UserCredentialRegistrationRequest)
 	if err := decodeJSON(r, req); err != nil {
-		return errInvalidJSON()
+		return apierror.ErrInvalidJSON()
 	}
 
 	if err := h.validate(req); err != nil {
-		return errValidation(err)
+		return apierror.ErrValidation(err)
 	}
 
 	customer, err := h.store.GetCustomerByEmail(ctx, req.Email)
@@ -255,10 +259,9 @@ func registerNewCustomer(
 	if err != nil {
 		errCode := db.ErrorCode(err)
 		if errCode == db.UniqueViolation {
-			return db.CustomerRegistrationTxResults{}, NewAPIError(
+			return db.CustomerRegistrationTxResults{}, apierror.NewAPIError(
 				http.StatusConflict,
-				"email is taken",
-				nil,
+				errors.New("email is taken"),
 			)
 		}
 
@@ -294,10 +297,9 @@ func createCredentialAccount(
 		if err != nil {
 			errCode := db.ErrorCode(err)
 			if errCode == db.UniqueViolation {
-				return db.AccountInfo{}, NewAPIError(
+				return db.AccountInfo{}, apierror.NewAPIError(
 					http.StatusConflict,
-					"account already registered",
-					nil,
+					errors.New("account already registered"),
 				)
 			}
 
@@ -321,10 +323,9 @@ func createCredentialAccount(
 		if err != nil {
 			errCode := db.ErrorCode(err)
 			if errCode == db.UniqueViolation {
-				return db.AccountInfo{}, NewAPIError(
+				return db.AccountInfo{}, apierror.NewAPIError(
 					http.StatusConflict,
-					"account already registered",
-					nil,
+					errors.New("account already registered"),
 				)
 			}
 
