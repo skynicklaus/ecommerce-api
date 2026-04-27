@@ -27,15 +27,15 @@ RETURNING id, product_id, product_variant_id, asset_key, type, mime_type, alt_te
 `
 
 type CreateProductAssetParams struct {
-	ProductID        uuid.UUID `json:"product_id"`
-	ProductVariantID uuid.UUID `json:"product_variant_id"`
-	AssetKey         string    `json:"asset_key"`
-	Type             string    `json:"type"`
-	MimeType         string    `json:"mime_type"`
-	AltText          *string   `json:"alt_text"`
-	SortOrder        int16     `json:"sort_order"`
-	IsPrimary        bool      `json:"is_primary"`
-	DurationSeconds  *int16    `json:"duration_seconds"`
+	ProductID        uuid.UUID  `json:"product_id"`
+	ProductVariantID *uuid.UUID `json:"product_variant_id"`
+	AssetKey         string     `json:"asset_key"`
+	Type             string     `json:"type"`
+	MimeType         string     `json:"mime_type"`
+	AltText          *string    `json:"alt_text"`
+	SortOrder        int16      `json:"sort_order"`
+	IsPrimary        bool       `json:"is_primary"`
+	DurationSeconds  *int16     `json:"duration_seconds"`
 }
 
 func (q *Queries) CreateProductAsset(ctx context.Context, arg CreateProductAssetParams) (ProductAsset, error) {
