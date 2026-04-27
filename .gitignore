@@ -38,3 +38,5 @@ main
 # garage
 infra/garage/data
 garage.toml
+
+CLAUDE.md
