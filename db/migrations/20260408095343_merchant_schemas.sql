@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
 CREATE TABLE IF NOT EXISTS product_assets (
     id BIGSERIAL PRIMARY KEY
     , product_id UUID NOT NULL
-    , product_variant_id UUID NOT NULL
+    , product_variant_id UUID
     , asset_key TEXT NOT NULL
     , type TEXT NOT NULL
     , mime_type TEXT NOT NULL
