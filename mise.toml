@@ -1,0 +1,35 @@
+[tools]
+go = "latest"
+sqlc = "latest"
+
+[tasks.run]
+description = "Start the development server with hot reloading"
+run = "air"
+
+[tasks.sqlc]
+description = "Generate type-safe Go code from SQL"
+run = "sqlc generate"
+
+[tasks.test]
+description = "Run unit & integration tests"
+run = "go test ./... -v"
+
+[tasks.migrateup]
+description = "Run database migrations up"
+run = "goose up"
+
+[tasks.migratedown]
+description = "Rollback database migrations"
+run = "goose down-to 0"
+
+[tasks.composeup]
+description = "Start docker-compose services"
+run = "docker-compose -f ./infra/docker-compose.yml up -d"
+
+[tasks.composedown]
+description = "Stop and tear down docker-compose services with volumes"
+run = "docker-compose -f ./infra/docker-compose.yml down -v"
+
+[tasks.composestop]
+description = "Stop docker-compose services"
+run = "docker-compose stop"
