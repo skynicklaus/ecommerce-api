@@ -1,5 +1,7 @@
 -- name: CreateIdentity :one
-INSERT INTO identities (
-    type
-) VALUES ($1)
-RETURNING *;
+INSERT INTO
+    identities (TYPE)
+VALUES
+    ($1)
+RETURNING
+    *;
