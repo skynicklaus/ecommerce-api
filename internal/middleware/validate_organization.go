@@ -12,7 +12,7 @@ import (
 
 type OrganizationContextKey struct{}
 
-func (m *Middleware) VaslidateOrganization(next http.Handler) http.Handler {
+func (m *Middleware) ValidateOrganization(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		uuidString := os.Getenv("ORGANIZATION_ID")
 
