@@ -21,3 +21,20 @@ func (c *RedisClient) CachePendingUpload(
 
 	return err
 }
+
+func (c *RedisClient) GetPendingUpload(
+	ctx context.Context,
+	token string,
+) ([]byte, error) {
+	key := fmt.Sprintf("%s%s", PendingUploadCacheKey, token)
+	return c.Get(ctx, key).Bytes()
+}
+
+func (c *RedisClient) DeletePendingUpload(
+	ctx context.Context,
+	token string,
+) error {
+	key := fmt.Sprintf("%s%s", PendingUploadCacheKey, token)
+	_, err := c.Del(ctx, key).Result()
+	return err
+}
