@@ -1,4 +1,5 @@
--- +goose Up +goose StatementBegin
+-- +goose Up
+-- +goose StatementBegin
 SET
     lock_timeout = '2s';
 
