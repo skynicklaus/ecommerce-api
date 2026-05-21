@@ -1,6 +1,10 @@
 [tools]
+air = "latest"
 go = "latest"
 sqlc = "latest"
+
+[env]
+_.file = [".env"]
 
 [tasks.run]
 description = "Start the development server with hot reloading"
@@ -33,3 +37,7 @@ run = "docker-compose -f ./infra/docker-compose.yml down -v"
 [tasks.composestop]
 description = "Stop docker-compose services"
 run = "docker-compose stop"
+
+[tasks.cleantemp]
+description = "Delete all temp uploads from Garage"
+run = "aws s3 rm s3://$S3_BUCKET/temp/ --recursive --endpoint-url $S3_ENDPOINT"
