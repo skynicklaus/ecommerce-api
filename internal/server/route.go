@@ -53,9 +53,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
 
 		r.Group(func(r chi.Router) {
-			r.Use(midware.VaslidateOrganization)
+			r.Use(midware.ValidateOrganization)
 
 			r.Post("/product-assets", s.make(v1Handler.PreUploadAssets))
+			r.Post("/products", s.make(v1Handler.CreateProduct))
 		})
 	})
 
@@ -67,7 +68,8 @@ type APIFunc func(http.ResponseWriter, *http.Request) error
 func (s *Server) make(h APIFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := h(w, r); err != nil {
-			httplog.SetAttrs(r.Context(),
+			httplog.SetAttrs(
+				r.Context(),
 				slog.String("error", err.Error()),
 			)
 			s.handleError(w, err)
