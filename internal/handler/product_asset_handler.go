@@ -22,6 +22,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/imageutil"
@@ -29,17 +30,19 @@ import (
 )
 
 const (
-	maxFilesPerUpload = 10
+	maxFilesPerUpload     = 10
+	multipartMemoryBudget = 10 << 20
 )
 
 type PendingUpload struct {
-	Token           string  `json:"token"`
-	TempKey         string  `json:"tempKey"`
-	FinalKey        string  `json:"finalKey"`
-	Type            string  `json:"type"`
-	ContentType     string  `json:"contentType"`
-	OriginalName    string  `json:"originalName"`
-	DurationSeconds float64 `json:"durationSeconds"`
+	Token           string    `json:"token"`
+	OrganizationID  uuid.UUID `json:"organizationId"`
+	TempKey         string    `json:"tempKey"`
+	FinalKey        string    `json:"finalKey"`
+	Type            string    `json:"type"`
+	ContentType     string    `json:"contentType"`
+	OriginalName    string    `json:"originalName"`
+	DurationSeconds float64   `json:"durationSeconds"`
 }
 
 type UploadTokenResponse struct {
@@ -55,14 +58,24 @@ func (h *V1Handler) PreUploadAssets(w http.ResponseWriter, r *http.Request) erro
 		return ctxErr
 	}
 
-	maxMemorySize := h.maxImageSize*(maxFilesPerUpload-1) + h.maxVideoSize
-	r.Body = http.MaxBytesReader(w, r.Body, maxMemorySize)
-	if err := r.ParseMultipartForm(maxMemorySize); err != nil {
+	maxUploadSize := h.maxVideoSize * maxFilesPerUpload
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	//nolint:gosec // G120: Request body is strictly bounded by MaxBytesReader above
+	if err := r.ParseMultipartForm(multipartMemoryBudget); err != nil {
 		return apierror.NewAPIError(
 			http.StatusRequestEntityTooLarge,
 			err,
 		)
 	}
+	defer func() {
+		if err := r.MultipartForm.RemoveAll(); err != nil {
+			h.logger.WarnContext(
+				ctx,
+				"failed to clean up multipart temp files",
+				slog.Any("err", err),
+			)
+		}
+	}()
 
 	headers := r.MultipartForm.File["files"]
 	if len(headers) == 0 {
@@ -72,50 +85,48 @@ func (h *V1Handler) PreUploadAssets(w http.ResponseWriter, r *http.Request) erro
 		return apierror.NewAPIError(http.StatusBadRequest, errors.New("too many files"))
 	}
 
-	type result struct {
-		index  int
-		record *PendingUpload
-		err    error
-	}
-
-	results := make([]result, len(headers))
-	var wg sync.WaitGroup
+	results := make([]*PendingUpload, len(headers))
+	g, gCtx := errgroup.WithContext(ctx)
 
 	for i, header := range headers {
-		wg.Add(1)
-		go func(i int, header *multipart.FileHeader) {
-			defer wg.Done()
-			record, err := h.processTempUpload(ctx, header, organization.ID)
-			results[i] = result{index: i, record: record, err: err}
-		}(i, header)
+		g.Go(func() error {
+			record, err := h.processTempUpload(gCtx, header, organization.ID)
+			if err != nil {
+				return err
+			}
+			results[i] = record
+			return nil
+		})
 	}
-	wg.Wait()
 
-	var tokens []UploadTokenResponse
-	for _, res := range results {
-		if res.err != nil {
-			for _, other := range results {
-				if other.err != nil || other.record == nil {
-					continue
-				}
-
-				if deleteErr := h.storage.DeleteObject(ctx, *h.bucket, other.record.TempKey); deleteErr != nil {
-					h.logger.WarnContext(
-						ctx,
-						"failed to delete temp object",
-						slog.Any("err", deleteErr),
-					)
-				}
+	if err := g.Wait(); err != nil {
+		var cleanupWg sync.WaitGroup
+		for _, record := range results {
+			if record == nil {
+				continue
 			}
 
-			return apierror.NewAPIError(http.StatusInternalServerError, res.err)
+			cleanupWg.Add(1)
+			go func(key string) {
+				defer cleanupWg.Done()
+				h.deleteTempObject(ctx, key)
+			}(record.TempKey)
 		}
+		cleanupWg.Wait()
 
-		tokens = append(tokens, UploadTokenResponse{
-			Token:        res.record.Token,
-			OriginalName: res.record.OriginalName,
-			ContentType:  res.record.ContentType,
-		})
+		if apiErr, ok := errors.AsType[apierror.APIError](err); ok {
+			return apiErr
+		}
+		return apierror.NewAPIError(http.StatusInternalServerError, err)
+	}
+
+	tokens := make([]UploadTokenResponse, len(results))
+	for i, record := range results {
+		tokens[i] = UploadTokenResponse{
+			Token:        record.Token,
+			OriginalName: record.OriginalName,
+			ContentType:  record.ContentType,
+		}
 	}
 
 	return WriteJSON(w, http.StatusCreated, map[string]any{
@@ -144,7 +155,10 @@ func (h *V1Handler) processTempUpload(
 
 	contentType := http.DetectContentType(sniff)
 	if !h.mime.Allowed(contentType) {
-		return nil, fmt.Errorf("type %q is not allowed", contentType)
+		return nil, apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("type %q is not allowed", contentType),
+		)
 	}
 
 	full := io.MultiReader(bytes.NewReader(sniff), file)
@@ -154,12 +168,18 @@ func (h *V1Handler) processTempUpload(
 		return h.processImageUpload(ctx, organizationID, full, header, contentType)
 	case strings.HasPrefix(contentType, "video/"):
 		if header.Size > h.maxVideoSize {
-			return nil, fmt.Errorf("%q exceeds size limit", header.Filename)
+			return nil, apierror.NewAPIError(
+				http.StatusBadRequest,
+				fmt.Errorf("%q exceeds size limit", header.Filename),
+			)
 		}
 
 		return h.processVideoUpload(ctx, organizationID, full, header)
 	default:
-		return nil, fmt.Errorf("type %q not supported", contentType)
+		return nil, apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("type %q not supported", contentType),
+		)
 	}
 }
 
@@ -171,7 +191,10 @@ func (h *V1Handler) processImageUpload(
 	contentType string,
 ) (*PendingUpload, error) {
 	if header.Size > h.maxImageSize {
-		return nil, fmt.Errorf("%q exceeds size limit", header.Filename)
+		return nil, apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("%q exceeds size limit", header.Filename),
+		)
 	}
 
 	buf, err := io.ReadAll(reader)
@@ -181,7 +204,7 @@ func (h *V1Handler) processImageUpload(
 
 	newBuf, err := imageutil.ValidateAndStrip(buf)
 	if err != nil {
-		return nil, err
+		return nil, apierror.NewAPIError(http.StatusBadRequest, err)
 	}
 
 	ext := filepath.Ext(header.Filename)
@@ -190,19 +213,21 @@ func (h *V1Handler) processImageUpload(
 	}
 
 	tempKey := fmt.Sprintf("temp/%s%s", uuid.New().String(), ext)
+	imageSize := int64(len(newBuf))
 	//nolint:exhaustruct // too many fields
 	_, err = h.storage.S3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      h.bucket,
-		Key:         &tempKey,
-		Body:        bytes.NewReader(newBuf),
-		ContentType: &contentType,
-		Metadata:    map[string]string{"original-file-name": header.Filename},
+		Bucket:        h.bucket,
+		Key:           &tempKey,
+		Body:          bytes.NewReader(newBuf),
+		ContentLength: &imageSize,
+		ContentType:   &contentType,
+		Metadata:      map[string]string{"original-file-name": header.Filename},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	digest := sha256.Sum256(buf)
+	digest := sha256.Sum256(newBuf)
 	hashHex := hex.EncodeToString(digest[:])
 	now := time.Now()
 	year, month, _ := now.Date()
@@ -218,6 +243,7 @@ func (h *V1Handler) processImageUpload(
 
 	pendingUpload := &PendingUpload{
 		Token:           token,
+		OrganizationID:  organizationID,
 		TempKey:         tempKey,
 		FinalKey:        finalKey,
 		Type:            string(util.ProductAssetImage),
@@ -228,24 +254,12 @@ func (h *V1Handler) processImageUpload(
 
 	cacheData, err := json.Marshal(pendingUpload)
 	if err != nil {
-		if deleteErr := h.storage.DeleteObject(ctx, *h.bucket, tempKey); deleteErr != nil {
-			h.logger.WarnContext(
-				ctx,
-				"unable to delete temp object",
-				slog.Any("err", deleteErr),
-			)
-		}
+		h.deleteTempObject(ctx, tempKey)
 		return nil, err
 	}
 
 	if cacheErr := h.cache.CachePendingUpload(ctx, token, cacheData); cacheErr != nil {
-		if deleteErr := h.storage.DeleteObject(ctx, *h.bucket, tempKey); deleteErr != nil {
-			h.logger.WarnContext(
-				ctx,
-				"unable to delete temp object",
-				slog.Any("err", deleteErr),
-			)
-		}
+		h.deleteTempObject(ctx, tempKey)
 
 		return nil, fmt.Errorf("failed to cache pending upload: %w", cacheErr)
 	}
@@ -264,12 +278,11 @@ func (h *V1Handler) processVideoUpload(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
+	tempPath := tempFile.Name()
+	// safe to ignore
+	_ = tempFile.Close()
+	defer os.Remove(tempPath)
 
-	digester := sha256.New()
-
-	//nolint:gosec // ffmpeg is trusted system binary
 	cmd := exec.CommandContext(
 		ctx,
 		"ffmpeg",
@@ -281,32 +294,55 @@ func (h *V1Handler) processVideoUpload(
 		"-b:a", "128k",
 		"-movflags", "+faststart",
 		"-f", "mp4",
-		tempFile.Name(),
+		tempPath,
 		"-y",
 	)
-	cmd.Stdin = io.TeeReader(reader, digester)
+	cmd.Stdin = reader
 
 	if err = cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to transcode video: %w", err)
+		return nil, apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("failed to transcode video: %w", err),
+		)
 	}
 
-	duration, err := probeDuration(ctx, tempFile.Name())
+	duration, err := probeDuration(ctx, tempPath)
 	if err != nil {
-		return nil, err
+		return nil, apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("invalid or corrupted video file: %w", err),
+		)
 	}
 
 	const maxDurationSeconds = 60
 	if duration > maxDurationSeconds {
-		return nil, fmt.Errorf(
+		return nil, apierror.NewAPIError(http.StatusBadRequest, fmt.Errorf(
 			"video too long (%.0fs), maximum is %ds",
 			duration,
 			maxDurationSeconds,
-		)
+		))
 	}
 
-	if _, err = tempFile.Seek(0, io.SeekStart); err != nil {
-		return nil, fmt.Errorf("failed to seek temp file: %w", err)
+	videoFile, err := os.Open(tempPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open transcoded video: %w", err)
 	}
+	defer videoFile.Close()
+
+	digester := sha256.New()
+	if _, copyErr := io.Copy(digester, videoFile); copyErr != nil {
+		return nil, fmt.Errorf("failed to hash transcoded video: %w", copyErr)
+	}
+
+	if _, seekErr := videoFile.Seek(0, io.SeekStart); seekErr != nil {
+		return nil, fmt.Errorf("failed to seek transcoded video: %w", seekErr)
+	}
+
+	videoInfo, err := videoFile.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat transcoded video: %w", err)
+	}
+	videoSize := videoInfo.Size()
 
 	uploadID := uuid.New().String()
 	tempKey := fmt.Sprintf("temp/%s.mp4", uploadID)
@@ -314,11 +350,12 @@ func (h *V1Handler) processVideoUpload(
 
 	//nolint:exhaustruct // too many fields
 	_, err = h.storage.S3.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      h.bucket,
-		Key:         &tempKey,
-		Body:        tempFile,
-		ContentType: &videoType,
-		Metadata:    map[string]string{"original-file-name": header.Filename},
+		Bucket:        h.bucket,
+		Key:           &tempKey,
+		Body:          videoFile,
+		ContentLength: &videoSize,
+		ContentType:   &videoType,
+		Metadata:      map[string]string{"original-file-name": header.Filename},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload video: %w", err)
@@ -338,6 +375,7 @@ func (h *V1Handler) processVideoUpload(
 
 	pendingUpload := &PendingUpload{
 		Token:           token,
+		OrganizationID:  organizationID,
 		TempKey:         tempKey,
 		FinalKey:        finalKey,
 		Type:            string(util.ProductAssetVideo),
@@ -348,24 +386,12 @@ func (h *V1Handler) processVideoUpload(
 
 	cacheData, err := json.Marshal(pendingUpload)
 	if err != nil {
-		if deleteErr := h.storage.DeleteObject(ctx, *h.bucket, tempKey); deleteErr != nil {
-			h.logger.WarnContext(
-				ctx,
-				"unable to delete temp object",
-				slog.Any("err", deleteErr),
-			)
-		}
+		h.deleteTempObject(ctx, tempKey)
 		return nil, err
 	}
 
 	if cacheErr := h.cache.CachePendingUpload(ctx, token, cacheData); cacheErr != nil {
-		if deleteErr := h.storage.DeleteObject(ctx, *h.bucket, tempKey); deleteErr != nil {
-			h.logger.WarnContext(
-				ctx,
-				"unable to delete temp object",
-				slog.Any("err", deleteErr),
-			)
-		}
+		h.deleteTempObject(ctx, tempKey)
 
 		return nil, fmt.Errorf("failed to cache pending upload: %w", cacheErr)
 	}
@@ -373,8 +399,21 @@ func (h *V1Handler) processVideoUpload(
 	return pendingUpload, nil
 }
 
+func (h *V1Handler) deleteTempObject(ctx context.Context, key string) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+
+	if err := h.storage.DeleteObject(cleanupCtx, *h.bucket, key); err != nil {
+		h.logger.WarnContext(
+			cleanupCtx,
+			"failed to delete temp S3 object",
+			slog.String("key", key),
+			slog.Any("err", err),
+		)
+	}
+}
+
 func probeDuration(ctx context.Context, path string) (float64, error) {
-	//nolint:gosec // ffprobe is trusted system binary
 	cmd := exec.CommandContext(
 		ctx, "ffprobe",
 		"-v", "error",
