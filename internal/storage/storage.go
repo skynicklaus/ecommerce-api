@@ -24,7 +24,10 @@ func New(ctx context.Context) (*S3Storage, error) {
 
 	s3c := s3.NewFromConfig(cfg, func(o *s3.Options) {
 		if env == "local" || env == "development" {
-			endpoint := os.Getenv("AWS_ENDPOINT")
+			endpoint := os.Getenv("S3_ENDPOINT")
+			if endpoint == "" {
+				endpoint = os.Getenv("AWS_ENDPOINT")
+			}
 			o.BaseEndpoint = &endpoint
 			o.UsePathStyle = true
 		}
@@ -42,6 +45,17 @@ func (s *S3Storage) DeleteObject(ctx context.Context, bucket string, key string)
 	_, err := s.S3.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(key),
+	})
+
+	return err
+}
+
+func (s *S3Storage) CopyObject(ctx context.Context, bucket string, sourceKey string, destKey string) error {
+	//nolint:exhaustruct // too many fields
+	_, err := s.S3.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(bucket),
+		CopySource: aws.String(bucket + "/" + sourceKey),
+		Key:        aws.String(destKey),
 	})
 
 	return err
