@@ -52,7 +52,10 @@ type CreateProductRequest struct {
 	Variants      []VariantRequest  `json:"variants"      validate:"required,min=1,dive"`
 }
 
-func (h *V1Handler) CreateProduct(w http.ResponseWriter, r *http.Request) error {
+func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // idempotency + S3 copies + DB tx
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
 	ctx := r.Context()
 	var committed bool
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -83,7 +86,7 @@ func (h *V1Handler) CreateProduct(w http.ResponseWriter, r *http.Request) error 
 		requestHash string
 		idemKeyPtr  *string
 	)
-	if idempotencyKey != "" {
+	if idempotencyKey != "" { //nolint:nestif // sequential fast-path checks (cache→DB→lock) before the write path
 		sum := sha256.Sum256(body)
 		requestHash = hex.EncodeToString(sum[:])
 		idemKeyPtr = &idempotencyKey
@@ -233,7 +236,7 @@ func (h *V1Handler) CreateProduct(w http.ResponseWriter, r *http.Request) error 
 
 	// 4. Run atomic creation transaction. Failure triggers deferred S3 rollback.
 	result, err := h.store.CreateProductTx(ctx, txParams)
-	if err != nil {
+	if err != nil { //nolint:nestif // unique-violation fallback requires nested lookup after a raced commit
 		// Last-resort idempotency: another worker beat us past the Redis lock and persisted first.
 		// The partial UNIQUE index on (organization_id, idempotency_key) fires here.
 		if idempotencyKey != "" && db.IsUniqueViolation(err) {
@@ -491,7 +494,41 @@ type ProductDetailsResponse struct {
 	Variants       []VariantResponse `json:"variants"`
 }
 
-func (h *V1Handler) GetProductDetails(w http.ResponseWriter, r *http.Request) error {
+func (h *V1Handler) fetchProductBySlugOrID(
+	ctx context.Context,
+	slugOrID string,
+) (db.GetActiveProductByIDRow, error) {
+	if parsedID, err := uuid.Parse(slugOrID); err == nil {
+		p, pErr := h.store.GetActiveProductByID(ctx, parsedID)
+		if pErr != nil {
+			if errors.Is(pErr, db.ErrNotFound) {
+				return db.GetActiveProductByIDRow{}, apierror.NewAPIError(
+					http.StatusNotFound,
+					fmt.Errorf("product not found: %s", slugOrID),
+				)
+			}
+			return db.GetActiveProductByIDRow{}, fmt.Errorf("failed to fetch product: %w", pErr)
+		}
+		return p, nil
+	}
+
+	p, pErr := h.store.GetActiveProductBySlug(ctx, slugOrID)
+	if pErr != nil {
+		if errors.Is(pErr, db.ErrNotFound) {
+			return db.GetActiveProductByIDRow{}, apierror.NewAPIError(
+				http.StatusNotFound,
+				fmt.Errorf("product not found: %s", slugOrID),
+			)
+		}
+		return db.GetActiveProductByIDRow{}, fmt.Errorf("failed to fetch product: %w", pErr)
+	}
+	return db.GetActiveProductByIDRow(p), nil
+}
+
+func (h *V1Handler) GetProductDetails( //nolint:funlen
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
 	ctx := r.Context()
 	slugOrID := chi.URLParam(r, "slug_or_id")
 	if slugOrID == "" {
@@ -501,66 +538,22 @@ func (h *V1Handler) GetProductDetails(w http.ResponseWriter, r *http.Request) er
 		)
 	}
 
-	var (
-		productID      uuid.UUID
-		organizationID uuid.UUID
-		categoryID     uuid.UUID
-		name           string
-		slug           string
-		status         string
-		isFeatured     bool
-		description    []byte
-		specification  []byte
-		createdAt      time.Time
-		updatedAt      time.Time
-	)
-
-	parsedID, parseErr := uuid.Parse(slugOrID)
-	if parseErr == nil {
-		p, pErr := h.store.GetActiveProductByID(ctx, parsedID)
-		if pErr != nil {
-			if errors.Is(pErr, db.ErrNotFound) {
-				return apierror.NewAPIError(
-					http.StatusNotFound,
-					fmt.Errorf("product not found: %s", slugOrID),
-				)
-			}
-			return fmt.Errorf("failed to fetch product: %w", pErr)
-		}
-		productID = p.ID
-		organizationID = p.OrganizationID
-		categoryID = p.CategoryID
-		name = p.Name
-		slug = p.Slug
-		status = p.Status
-		isFeatured = p.IsFeatured
-		description = p.Description
-		specification = p.Specification
-		createdAt = p.CreatedAt
-		updatedAt = p.UpdatedAt
-	} else {
-		p, pErr := h.store.GetActiveProductBySlug(ctx, slugOrID)
-		if pErr != nil {
-			if errors.Is(pErr, db.ErrNotFound) {
-				return apierror.NewAPIError(
-					http.StatusNotFound,
-					fmt.Errorf("product not found: %s", slugOrID),
-				)
-			}
-			return fmt.Errorf("failed to fetch product: %w", pErr)
-		}
-		productID = p.ID
-		organizationID = p.OrganizationID
-		categoryID = p.CategoryID
-		name = p.Name
-		slug = p.Slug
-		status = p.Status
-		isFeatured = p.IsFeatured
-		description = p.Description
-		specification = p.Specification
-		createdAt = p.CreatedAt
-		updatedAt = p.UpdatedAt
+	p, fetchErr := h.fetchProductBySlugOrID(ctx, slugOrID)
+	if fetchErr != nil {
+		return fetchErr
 	}
+
+	productID := p.ID
+	organizationID := p.OrganizationID
+	categoryID := p.CategoryID
+	name := p.Name
+	slug := p.Slug
+	status := p.Status
+	isFeatured := p.IsFeatured
+	description := p.Description
+	specification := p.Specification
+	createdAt := p.CreatedAt
+	updatedAt := p.UpdatedAt
 
 	variants, err := h.store.ListProductVariantsByProductID(ctx, productID)
 	if err != nil {
@@ -662,6 +655,7 @@ type ListProductsResponse struct {
 	NextCursor *string                  `json:"nextCursor"`
 }
 
+//nolint:funlen
 func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
@@ -685,7 +679,7 @@ func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var nextCursor *string
-	if int32(len(products)) == limit && len(products) > 0 {
+	if len(products) == int(limit) && len(products) > 0 {
 		last := products[len(products)-1]
 		encoded := encodeCursor(last.CreatedAt, last.ID)
 		nextCursor = &encoded
@@ -857,7 +851,10 @@ func parseLimit(r *http.Request) int32 {
 			if parsed > maxListLimit {
 				parsed = maxListLimit
 			}
-			limit = int32(parsed)
+			//nolint:gosec // parsed is capped to maxListLimit (100) before this conversion
+			limit = int32(
+				parsed,
+			)
 		}
 	}
 	return limit

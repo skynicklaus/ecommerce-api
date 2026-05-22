@@ -38,11 +38,12 @@ type ProductAssetParams struct {
 }
 
 type CreateProductTxResults struct {
-	Product         Product
-	ProductVariants []ProductVariant
-	ProductAssets   []ProductAsset
+	Product         Product          `json:"product"`
+	ProductVariants []ProductVariant `json:"productVariants"`
+	ProductAssets   []ProductAsset   `json:"productAssets"`
 }
 
+//nolint:gocognit
 func (store *SQLStore) CreateProductTx(
 	ctx context.Context,
 	arg CreateProductTxParams,
