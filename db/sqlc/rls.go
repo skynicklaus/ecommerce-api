@@ -10,7 +10,7 @@ import (
 
 type RLSContext struct {
 	IdentityID      uuid.UUID
-	OrganiationID   uuid.UUID
+	OrganizationID  uuid.UUID
 	IsPlatformUser  bool
 	IsPlatformAdmin bool
 }
@@ -43,7 +43,7 @@ func applyRLS(ctx context.Context, tx pgx.Tx) error {
 			set_config('app.is_platform_admin', $4, true)
 		`,
 		rls.IdentityID.String(),
-		rls.OrganiationID.String(),
+		rls.OrganizationID.String(),
 		strconv.FormatBool(rls.IsPlatformUser),
 		strconv.FormatBool(rls.IsPlatformAdmin),
 	)
