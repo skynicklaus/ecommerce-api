@@ -35,6 +35,11 @@ func ErrorCode(err error) string {
 	return ""
 }
 
+func IsUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == UniqueViolation
+}
+
 // db custom error
 var (
 	ErrMismatchOrganizationType = errors.New("organization type mistmatch")
