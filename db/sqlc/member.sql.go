@@ -11,6 +11,23 @@ import (
 	"github.com/google/uuid"
 )
 
+const countPlatformAdmins = `-- name: CountPlatformAdmins :one
+SELECT
+    COUNT(*)
+FROM
+    members m
+    JOIN organizations o ON o.id = m.organization_id
+WHERE
+    o.type = 'platform'
+`
+
+func (q *Queries) CountPlatformAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPlatformAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMember = `-- name: CreateMember :one
 INSERT INTO
     members (identity_id, organization_id)
@@ -27,6 +44,34 @@ type CreateMemberParams struct {
 
 func (q *Queries) CreateMember(ctx context.Context, arg CreateMemberParams) (Member, error) {
 	row := q.db.QueryRow(ctx, createMember, arg.IdentityID, arg.OrganizationID)
+	var i Member
+	err := row.Scan(
+		&i.ID,
+		&i.IdentityID,
+		&i.OrganizationID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getMemberByIdentityID = `-- name: GetMemberByIdentityID :one
+SELECT
+    id,
+    identity_id,
+    organization_id,
+    created_at
+FROM
+    members
+WHERE
+    identity_id = $1
+ORDER BY
+    created_at ASC
+LIMIT
+    1
+`
+
+func (q *Queries) GetMemberByIdentityID(ctx context.Context, identityID uuid.UUID) (Member, error) {
+	row := q.db.QueryRow(ctx, getMemberByIdentityID, identityID)
 	var i Member
 	err := row.Scan(
 		&i.ID,
