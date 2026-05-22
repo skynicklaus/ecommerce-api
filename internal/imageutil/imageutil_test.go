@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/deepteams/webp"
+	"github.com/stretchr/testify/require"
 )
 
 func createTestImage(w, h int, format string) ([]byte, error) {
@@ -54,120 +55,72 @@ func injectEXIF(jpegBytes []byte) []byte {
 }
 
 func TestValidateAndStrip(t *testing.T) {
-	// 1. Valid JPEG image
 	t.Run("valid jpeg", func(t *testing.T) {
 		buf, err := createTestImage(300, 300, "jpeg")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
-		if err != nil {
-			t.Errorf("expected success, got error: %v", err)
-		}
-		if len(out) == 0 {
-			t.Error("expected non-empty output")
-		}
+		require.NoError(t, err)
+		require.NotEmpty(t, out)
 	})
 
-	// 2. Valid WebP image
 	t.Run("valid webp", func(t *testing.T) {
 		buf, err := createTestImage(300, 300, "webp")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
-		if err != nil {
-			t.Errorf("expected success, got error: %v", err)
-		}
-		if len(out) == 0 {
-			t.Error("expected non-empty output")
-		}
+		require.NoError(t, err)
+		require.NotEmpty(t, out)
 	})
 
-	// 3. Too small image
 	t.Run("too small", func(t *testing.T) {
 		buf, err := createTestImage(299, 300, "jpeg")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 
 		_, err = ValidateAndStrip(buf)
-		if err == nil {
-			t.Error("expected error for small image, got nil")
-		}
+		require.Error(t, err)
 	})
 
-	// 4. Too large image
 	t.Run("too large", func(t *testing.T) {
 		buf, err := createTestImage(8000, 8000, "jpeg")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 
 		_, err = ValidateAndStrip(buf)
-		if err == nil {
-			t.Error("expected error for too large image, got nil")
-		}
+		require.Error(t, err)
 	})
 
-	// 5. Valid PNG image
 	t.Run("valid png", func(t *testing.T) {
 		buf, err := createTestImage(300, 300, "png")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
-		if err != nil {
-			t.Errorf("expected success, got error: %v", err)
-		}
-		if len(out) == 0 {
-			t.Error("expected non-empty output")
-		}
+		require.NoError(t, err)
+		require.NotEmpty(t, out)
 	})
 
-	// 6. EXIF metadata is stripped from JPEG
 	t.Run("strips jpeg metadata", func(t *testing.T) {
 		base, err := createTestImage(300, 300, "jpeg")
-		if err != nil {
-			t.Fatalf("failed to create test image: %v", err)
-		}
+		require.NoError(t, err)
 		tagged := injectEXIF(base)
 
-		if !bytes.Contains(tagged, []byte("Exif")) {
-			t.Fatal("test setup error: injected EXIF marker not found in tagged JPEG")
-		}
+		require.True(t, bytes.Contains(tagged, []byte("Exif")), "test setup: injected EXIF marker not found")
 
 		out, err := ValidateAndStrip(tagged)
-		if err != nil {
-			t.Fatalf("expected success, got: %v", err)
-		}
+		require.NoError(t, err)
+		require.False(t, bytes.Contains(out, []byte("Exif")), "output still contains EXIF metadata after strip")
 
-		if bytes.Contains(out, []byte("Exif")) {
-			t.Error("output still contains EXIF metadata after strip")
-		}
-
-		if _, _, decodeErr := image.DecodeConfig(bytes.NewReader(out)); decodeErr != nil {
-			t.Errorf("output is not a valid image: %v", decodeErr)
-		}
+		_, _, decodeErr := image.DecodeConfig(bytes.NewReader(out))
+		require.NoError(t, decodeErr, "output is not a valid image")
 	})
 
-	// 7. Corrupted input
 	t.Run("corrupted input", func(t *testing.T) {
 		_, err := ValidateAndStrip([]byte("this is not an image"))
-		if err == nil {
-			t.Error("expected error for corrupted input, got nil")
-		}
+		require.Error(t, err)
 	})
 
-	// 8. Truncated header (valid PNG signature, no IHDR)
 	t.Run("truncated header", func(t *testing.T) {
 		pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 		_, err := ValidateAndStrip(pngSignature)
-		if err == nil {
-			t.Error("expected error for truncated header, got nil")
-		}
+		require.Error(t, err)
 	})
 }
