@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
     STATUS TEXT NOT NULL DEFAULT 'draft',
     specification JSONB,
     is_featured BOOL NOT NULL DEFAULT FALSE,
+    idempotency_key TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_products_organization_id FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
