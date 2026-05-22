@@ -18,6 +18,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_category_id ON products (ca
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_products_organization_slug ON products (organization_id, slug);
 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_active_created_id ON products (created_at DESC, id DESC)
+WHERE
+    STATUS = 'active';
+
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_variants_product_id ON product_variants (product_id);
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_product_variants_organization_sku ON product_variants (organization_id, sku);
@@ -88,6 +92,8 @@ DROP INDEX CONCURRENTLY IF EXISTS uq_product_assets_primary;
 DROP INDEX CONCURRENTLY IF EXISTS uq_product_variants_organization_sku;
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_product_variants_product_id;
+
+DROP INDEX CONCURRENTLY IF EXISTS idx_products_active_created_id;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_products_organization_slug;
 
