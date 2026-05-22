@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -12,11 +13,16 @@ import (
 )
 
 func TestSQLStore_CreateOrganizationTx(t *testing.T) {
+	ctx := t.Context()
 	identity := createRandomIdentity(t)
 	organization := createRandomOrganization(t)
 
+	// Resolve by slug so the test isn't coupled to a seeded primary-key value.
+	merchantRole, err := testStore.GetRoleBySlug(ctx, "merchant.owner")
+	require.NoError(t, err)
+
 	tests := []struct {
-		name     string // description of this test case
+		name     string
 		arg      db.CreateOrganizationTxRequest
 		wantErr  bool
 		matchErr error
@@ -36,7 +42,7 @@ func TestSQLStore_CreateOrganizationTx(t *testing.T) {
 				Type:                 string(util.OrganizationTypeMerchant),
 				Metadata:             util.GetRandomDescriptionJSON(t, 10),
 				Status:               util.GetRandomOrganizationStatus(t),
-				RoleID:               4,
+				RoleID:               merchantRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypeMerchant),
 			},
 			wantErr:  false,
@@ -65,7 +71,7 @@ func TestSQLStore_CreateOrganizationTx(t *testing.T) {
 				Type:                 string(util.OrganizationTypeMerchant),
 				Metadata:             util.GetRandomDescriptionJSON(t, 10),
 				Status:               util.GetRandomOrganizationStatus(t),
-				RoleID:               4,
+				RoleID:               merchantRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypeMerchant),
 			},
 			wantErr:  false,
@@ -80,10 +86,34 @@ func TestSQLStore_CreateOrganizationTx(t *testing.T) {
 				require.Equal(t, arg.Status, got.Organization.Status)
 			},
 		},
+		{
+			name: "organization.mismatched/fail",
+			arg: db.CreateOrganizationTxRequest{
+				IdentityID: identity.ID,
+				ParentID:   nil,
+				Name:       util.GetRandomString(t, 8),
+				Slug: fmt.Sprintf(
+					"%s.%s",
+					string(util.OrganizationTypeMerchant),
+					util.GetRandomString(t, 8),
+				),
+				Type:                 string(util.OrganizationTypeMerchant),
+				Metadata:             util.GetRandomDescriptionJSON(t, 10),
+				Status:               util.GetRandomOrganizationStatus(t),
+				RoleID:               merchantRole.ID,
+				RoleOrganizationType: string(util.OrganizationTypeCompany), // type mismatch
+			},
+			wantErr:  true,
+			matchErr: db.ErrMismatchOrganizationType,
+			check: func(t *testing.T, got db.CreateOrganizationTxResponse, _ db.CreateOrganizationTxRequest) {
+				require.Empty(t, got.Organization)
+				require.Empty(t, got.Member)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := testStore.CreateOrganizationTx(context.Background(), tt.arg)
+			got, err := testStore.CreateOrganizationTx(t.Context(), tt.arg)
 
 			if tt.wantErr {
 				require.Error(t, err)
