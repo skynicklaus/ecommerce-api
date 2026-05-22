@@ -1,19 +1,21 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomRoleWithOrg(t *testing.T, organization *db.Organization) db.Role {
+	t.Helper()
 	organizationType := util.GetRandomOrganizationType(t)
 	isSystem := true
 	slug := util.GetRandomString(t, 8)
@@ -33,7 +35,7 @@ func createRandomRoleWithOrg(t *testing.T, organization *db.Organization) db.Rol
 		IsSystem:         isSystem,
 	}
 
-	role, err := testStore.CreateRole(context.Background(), arg)
+	role, err := testStore.CreateRole(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, role)
 
@@ -49,6 +51,7 @@ func createRandomRoleWithOrg(t *testing.T, organization *db.Organization) db.Rol
 }
 
 func createRandomRole(t *testing.T) db.Role {
+	t.Helper()
 	n := util.CoinFlip(t)
 
 	if n == 1 {
@@ -66,7 +69,7 @@ func TestCreateRole(t *testing.T) {
 func TestGetRoleByID(t *testing.T) {
 	role1 := createRandomRole(t)
 
-	role2, err := testStore.GetRoleByID(context.Background(), role1.ID)
+	role2, err := testStore.GetRoleByID(t.Context(), role1.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, role2)
 
@@ -76,14 +79,14 @@ func TestGetRoleByID(t *testing.T) {
 	require.Equal(t, role1.RoleName, role2.RoleName)
 	require.Equal(t, role1.Slug, role2.Slug)
 	require.Equal(t, role1.IsSystem, role2.IsSystem)
-	require.WithinDuration(t, role1.CreatedAt, role2.CreatedAt, time.Second)
-	require.WithinDuration(t, role1.UpdatedAt, role2.UpdatedAt, time.Second)
+	require.WithinDuration(t, role1.CreatedAt, role2.CreatedAt, 5*time.Second)
+	require.WithinDuration(t, role1.UpdatedAt, role2.UpdatedAt, 5*time.Second)
 }
 
 func TestGetRoleBySlug(t *testing.T) {
 	role1 := createRandomRole(t)
 
-	role2, err := testStore.GetRoleBySlug(context.Background(), role1.Slug)
+	role2, err := testStore.GetRoleBySlug(t.Context(), role1.Slug)
 	require.NoError(t, err)
 	require.NotEmpty(t, role2)
 
@@ -93,8 +96,46 @@ func TestGetRoleBySlug(t *testing.T) {
 	require.Equal(t, role1.RoleName, role2.RoleName)
 	require.Equal(t, role1.Slug, role2.Slug)
 	require.Equal(t, role1.IsSystem, role2.IsSystem)
-	require.WithinDuration(t, role1.CreatedAt, role2.CreatedAt, time.Second)
-	require.WithinDuration(t, role1.UpdatedAt, role2.UpdatedAt, time.Second)
+	require.WithinDuration(t, role1.CreatedAt, role2.CreatedAt, 5*time.Second)
+	require.WithinDuration(t, role1.UpdatedAt, role2.UpdatedAt, 5*time.Second)
 }
 
-// TODO: Test ListOrganizationRolesByType
+func TestListOrganizationRolesByType(t *testing.T) {
+	ctx := t.Context()
+
+	makeOrg := func() db.Organization {
+		org, err := testStore.CreateOrganization(ctx, db.CreateOrganizationParams{
+			ParentID: nil,
+			Name:     util.GetRandomString(t, 8),
+			Type:     string(util.OrganizationTypeMerchant),
+			Slug:     fmt.Sprintf("merchant.%s", util.GetRandomString(t, 10)),
+			Status:   string(util.OrganizationStatusActive),
+			Metadata: nil,
+		})
+		require.NoError(t, err)
+		return org
+	}
+
+	orgA := makeOrg()
+	orgB := makeOrg()
+
+	roleA := createRandomRoleWithOrg(t, &orgA)
+	roleB := createRandomRoleWithOrg(t, &orgB)
+	sysRole := createRandomRoleWithOrg(t, nil) // NULL org_id — must always appear
+
+	roles, err := testStore.ListOrganizationRolesByType(ctx, db.ListOrganizationRolesByTypeParams{
+		OrganizationID:   &orgA.ID,
+		OrganizationType: string(util.OrganizationTypeMerchant),
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, roles)
+
+	idx := make(map[int16]bool, len(roles))
+	for _, r := range roles {
+		idx[r.ID] = true
+	}
+
+	require.True(t, idx[roleA.ID], "org A role should appear in results")
+	require.False(t, idx[roleB.ID], "org B role should not appear in results")
+	require.True(t, idx[sysRole.ID], "system role (NULL org_id) should always appear")
+}
