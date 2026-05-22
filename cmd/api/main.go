@@ -27,6 +27,18 @@ func main() {
 	slog.SetDefault(logger.Logger)
 	slog.SetLogLoggerLevel(slog.LevelError)
 
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		direction := "up"
+		if len(os.Args) > migrateDirectionArgIdx {
+			direction = os.Args[migrateDirectionArgIdx]
+		}
+		if err := runMigrate(context.Background(), direction, logger.Logger); err != nil {
+			logger.Error("migration failed", slog.Any("err", err))
+			os.Exit(1)
+		}
+		return
+	}
+
 	errC, err := run(logger)
 	if err != nil {
 		logger.Fatal("Couldn't run server", slog.Any("err", err))
