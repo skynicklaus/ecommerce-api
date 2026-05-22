@@ -15,8 +15,12 @@ description = "Generate type-safe Go code from SQL"
 run = "sqlc generate"
 
 [tasks.test]
-description = "Run unit & integration tests"
+description = "Run unit tests"
 run = "go test ./... -v"
+
+[tasks."test:integration"]
+description = "Run integration tests (requires docker stack: postgres, redis, garage)"
+run = "go test -tags=integration ./... -v"
 
 [tasks.migrateup]
 description = "Run database migrations up"
