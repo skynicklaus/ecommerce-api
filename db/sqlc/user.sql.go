@@ -77,3 +77,74 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 	)
 	return i, err
 }
+
+const getUserByIdentityID = `-- name: GetUserByIdentityID :one
+SELECT
+    id,
+    identity_id,
+    name,
+    email,
+    email_verified,
+    image,
+    created_at,
+    updated_at
+FROM
+    users
+WHERE
+    identity_id = $1
+LIMIT
+    1
+`
+
+func (q *Queries) GetUserByIdentityID(ctx context.Context, identityID uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByIdentityID, identityID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.IdentityID,
+		&i.Name,
+		&i.Email,
+		&i.EmailVerified,
+		&i.Image,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserWithCredential = `-- name: GetUserWithCredential :one
+SELECT
+    u.id,
+    u.identity_id,
+    u.name,
+    u.email,
+    ua.hashed_password
+FROM
+    users u
+LEFT JOIN user_accounts ua
+    ON u.id = ua.user_id AND ua.provider_id = 'credential'
+WHERE
+    u.email = $1
+LIMIT 1
+`
+
+type GetUserWithCredentialRow struct {
+	ID             uuid.UUID `json:"id"`
+	IdentityID     uuid.UUID `json:"identity_id"`
+	Name           string    `json:"name"`
+	Email          string    `json:"email"`
+	HashedPassword *string   `json:"hashed_password"`
+}
+
+func (q *Queries) GetUserWithCredential(ctx context.Context, email string) (GetUserWithCredentialRow, error) {
+	row := q.db.QueryRow(ctx, getUserWithCredential, email)
+	var i GetUserWithCredentialRow
+	err := row.Scan(
+		&i.ID,
+		&i.IdentityID,
+		&i.Name,
+		&i.Email,
+		&i.HashedPassword,
+	)
+	return i, err
+}
