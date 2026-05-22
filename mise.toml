@@ -28,12 +28,12 @@ description = "Run integration tests (requires docker stack: postgres, redis, ga
 run = "go test -tags=integration ./... -v"
 
 [tasks.migrateup]
-description = "Run database migrations up"
-run = "goose up"
+description = "Run database migrations up and bootstrap platform admin"
+run = "go run ./cmd/api migrate up"
 
 [tasks.migratedown]
-description = "Rollback database migrations"
-run = "goose down-to 0"
+description = "Rollback all database migrations"
+run = "go run ./cmd/api migrate down"
 
 [tasks.composeup]
 description = "Start docker-compose services"
