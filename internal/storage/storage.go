@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -11,8 +12,9 @@ import (
 )
 
 type S3Storage struct {
-	S3 *s3.Client
-	TM *transfermanager.Client
+	S3      *s3.Client
+	TM      *transfermanager.Client
+	Presign *s3.PresignClient
 }
 
 func New(ctx context.Context) (*S3Storage, error) {
@@ -33,10 +35,12 @@ func New(ctx context.Context) (*S3Storage, error) {
 		}
 	})
 	tmc := transfermanager.New(s3c)
+	pc := s3.NewPresignClient(s3c)
 
 	return &S3Storage{
-		S3: s3c,
-		TM: tmc,
+		S3:      s3c,
+		TM:      tmc,
+		Presign: pc,
 	}, nil
 }
 
@@ -59,4 +63,16 @@ func (s *S3Storage) CopyObject(ctx context.Context, bucket string, sourceKey str
 	})
 
 	return err
+}
+
+func (s *S3Storage) PresignGetObject(ctx context.Context, bucket string, key string, lifetime time.Duration) (string, error) {
+	//nolint:exhaustruct // too many fields
+	req, err := s.Presign.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(lifetime))
+	if err != nil {
+		return "", err
+	}
+	return req.URL, nil
 }
