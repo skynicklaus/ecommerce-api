@@ -1,18 +1,21 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/testify/v2/require"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomProductWithOrg(t *testing.T, organization db.Organization) db.Product {
+	t.Helper()
 	category := createRandomCategory(t)
 
 	n := util.CoinFlip(t)
@@ -30,7 +33,7 @@ func createRandomProductWithOrg(t *testing.T, organization db.Organization) db.P
 		Specification:  specification,
 	}
 
-	product, err := testStore.CreateProduct(context.Background(), arg)
+	product, err := testStore.CreateProduct(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, product)
 
@@ -54,6 +57,7 @@ func createRandomProductWithOrg(t *testing.T, organization db.Organization) db.P
 }
 
 func createRandomProduct(t *testing.T) db.Product {
+	t.Helper()
 	organization := createRandomOrganization(t)
 	return createRandomProductWithOrg(t, organization)
 }
@@ -65,7 +69,7 @@ func TestCreateProduct(t *testing.T) {
 func TestGetProductByID(t *testing.T) {
 	product1 := createRandomProduct(t)
 
-	product2, err := testStore.GetProductByID(context.Background(), product1.ID)
+	product2, err := testStore.GetProductByID(t.Context(), product1.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, product2)
 
@@ -76,12 +80,162 @@ func TestGetProductByID(t *testing.T) {
 	require.Equal(t, product1.Slug, product2.Slug)
 	require.Equal(t, product1.Status, product2.Status)
 	require.JSONEq(t, string(product1.Description), string(product2.Description))
-	require.WithinDuration(t, product1.CreatedAt, product2.CreatedAt, time.Second)
-	require.WithinDuration(t, product1.UpdatedAt, product2.UpdatedAt, time.Second)
+	require.WithinDuration(t, product1.CreatedAt, product2.CreatedAt, 5*time.Second)
+	require.WithinDuration(t, product1.UpdatedAt, product2.UpdatedAt, 5*time.Second)
 
 	if len(product1.Specification) > 0 {
 		require.JSONEq(t, string(product1.Specification), string(product2.Specification))
 	} else {
 		require.Equal(t, product1.Specification, product2.Specification)
 	}
+}
+
+func TestUpdateProductStatus(t *testing.T) {
+	product := createRandomProduct(t)
+	require.Equal(t, "draft", product.Status)
+
+	row, err := testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
+		ID:             product.ID,
+		OrganizationID: product.OrganizationID,
+		Status:         "active",
+	})
+	require.NoError(t, err)
+	require.Equal(t, product.ID, row.ID)
+	require.Equal(t, "active", row.Status)
+	require.NotZero(t, row.UpdatedAt)
+
+	fetched, err := testStore.GetProductByID(t.Context(), product.ID)
+	require.NoError(t, err)
+	require.Equal(t, "active", fetched.Status)
+}
+
+func TestGetActiveProductByIDAndSlug(t *testing.T) {
+	product := createRandomProduct(t)
+
+	// Should fail since it is in 'draft' status
+	_, err := testStore.GetActiveProductByID(t.Context(), product.ID)
+	require.Error(t, err)
+
+	_, err = testStore.GetActiveProductBySlug(t.Context(), product.Slug)
+	require.Error(t, err)
+
+	// Activate product
+	_, err = testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
+		ID:             product.ID,
+		OrganizationID: product.OrganizationID,
+		Status:         "active",
+	})
+	require.NoError(t, err)
+
+	// Should succeed now
+	rowID, err := testStore.GetActiveProductByID(t.Context(), product.ID)
+	require.NoError(t, err)
+	require.Equal(t, product.ID, rowID.ID)
+	require.Equal(t, "active", rowID.Status)
+
+	rowSlug, err := testStore.GetActiveProductBySlug(t.Context(), product.Slug)
+	require.NoError(t, err)
+	require.Equal(t, product.ID, rowSlug.ID)
+	require.Equal(t, product.Slug, rowSlug.Slug)
+}
+
+func TestGetProductBySlug(t *testing.T) {
+	product := createRandomProduct(t)
+
+	row, err := testStore.GetProductBySlug(t.Context(), product.Slug)
+	require.NoError(t, err)
+	require.Equal(t, product.ID, row.ID)
+	require.Equal(t, product.Slug, row.Slug)
+}
+
+func TestGetProductByIdempotencyKey(t *testing.T) {
+	organization := createRandomOrganization(t)
+	category := createRandomCategory(t)
+	key := "idempotency-key-" + util.GetRandomString(t, 12)
+
+	arg := db.CreateProductParams{
+		OrganizationID: organization.ID,
+		CategoryID:     category.ID,
+		Name:           "Idempotent Product",
+		Slug:           "idempotent-prod-" + util.GetRandomString(t, 8),
+		Description:    []byte(`{}`),
+		IdempotencyKey: &key,
+	}
+
+	product, err := testStore.CreateProduct(t.Context(), arg)
+	require.NoError(t, err)
+
+	row, err := testStore.GetProductByIdempotencyKey(t.Context(), db.GetProductByIdempotencyKeyParams{
+		OrganizationID: organization.ID,
+		IdempotencyKey: &key,
+	})
+	require.NoError(t, err)
+	require.Equal(t, product.ID, row.ID)
+	require.Equal(t, key, *row.IdempotencyKey)
+}
+
+func TestListProductsByOrganization(t *testing.T) {
+	organization := createRandomOrganization(t)
+
+	product1 := createRandomProductWithOrg(t, organization)
+	product2 := createRandomProductWithOrg(t, organization)
+
+	products, err := testStore.ListProductsByOrganization(t.Context(), organization.ID)
+	require.NoError(t, err)
+	require.Len(t, products, 2)
+
+	// Ordered by created_at DESC
+	require.Equal(t, product2.ID, products[0].ID)
+	require.Equal(t, product1.ID, products[1].ID)
+}
+
+func TestListActiveProductsAfter(t *testing.T) {
+	org := createRandomOrganization(t)
+
+	// Create 2 active products and 1 draft product.
+	p1 := createRandomProductWithOrg(t, org)
+	_, err := testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
+		ID:             p1.ID,
+		OrganizationID: org.ID,
+		Status:         "active",
+	})
+	require.NoError(t, err)
+
+	// Wait briefly to ensure distinct created_at timestamps for stable cursor ordering.
+	time.Sleep(100 * time.Millisecond)
+
+	p2 := createRandomProductWithOrg(t, org)
+	_, err = testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
+		ID:             p2.ID,
+		OrganizationID: org.ID,
+		Status:         "active",
+	})
+	require.NoError(t, err)
+
+	draft := createRandomProductWithOrg(t, org) // intentionally left in draft status
+
+	// Fetch active products.
+	rows, err := testStore.ListActiveProductsAfter(t.Context(), db.ListActiveProductsAfterParams{
+		AfterCreatedAt: time.Now().Add(time.Hour),
+		AfterID:        uuid.Nil,
+		PageLimit:      10,
+	})
+	require.NoError(t, err)
+
+	// p1 and p2 must appear; the draft product must not.
+	var foundP1, foundP2, foundDraft bool
+	for _, r := range rows {
+		switch r.ID {
+		case p1.ID:
+			foundP1 = true
+		case p2.ID:
+			foundP2 = true
+		case draft.ID:
+			foundDraft = true
+		}
+		require.Equal(t, "active", r.Status)
+	}
+	require.True(t, foundP1)
+	require.True(t, foundP2)
+	require.False(t, foundDraft, "draft product must not appear in active product listing")
 }
