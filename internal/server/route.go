@@ -52,11 +52,16 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
 
+		// Storefront (buyer-facing) reads — public, cross-tenant, active products only.
+		r.Get("/products", s.make(v1Handler.ListProducts))
+		r.Get("/products/{slug_or_id}", s.make(v1Handler.GetProductDetails))
+
 		r.Group(func(r chi.Router) {
 			r.Use(midware.ValidateOrganization)
 
 			r.Post("/product-assets", s.make(v1Handler.PreUploadAssets))
 			r.Post("/products", s.make(v1Handler.CreateProduct))
+			r.Patch("/products/{id}/status", s.make(v1Handler.UpdateProductStatus))
 		})
 	})
 
