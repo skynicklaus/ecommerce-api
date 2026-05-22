@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     parent_id UUID,
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
-    STATUS TEXT NOT NULL,
+    "status" TEXT NOT NULL,
     "type" TEXT NOT NULL,
     logo TEXT,
     metadata JSONB,

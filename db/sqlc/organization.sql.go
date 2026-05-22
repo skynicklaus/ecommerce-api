@@ -17,8 +17,8 @@ INSERT INTO
         parent_id,
         name,
         slug,
-        STATUS,
-        TYPE,
+        "status",
+        "type",
         metadata
     )
 VALUES
@@ -66,8 +66,8 @@ SELECT
     parent_id,
     name,
     slug,
-    STATUS,
-    TYPE,
+    "status",
+    "type",
     logo,
     metadata,
     created_at
@@ -104,8 +104,8 @@ SELECT
     parent_id,
     name,
     slug,
-    STATUS,
-    TYPE,
+    "status",
+    "type",
     logo,
     metadata,
     created_at

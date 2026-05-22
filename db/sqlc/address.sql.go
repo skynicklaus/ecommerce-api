@@ -16,7 +16,7 @@ const createAddress = `-- name: CreateAddress :one
 INSERT INTO
     addresses (
         organization_id,
-        TYPE,
+        "type",
         label,
         line1,
         line2,
@@ -79,7 +79,7 @@ const getAddressByID = `-- name: GetAddressByID :one
 SELECT
     id,
     organization_id,
-    TYPE,
+    "type",
     label,
     line1,
     line2,

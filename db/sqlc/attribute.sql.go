@@ -17,7 +17,7 @@ INSERT INTO
         organization_id,
         name,
         slug,
-        TYPE
+        "type"
     )
 VALUES
     ($1, $2, $3, $4)

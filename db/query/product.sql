@@ -24,16 +24,17 @@ WHERE
     AND idempotency_key = $2;
 
 -- name: UpdateProductStatus :one
-UPDATE products
+UPDATE
+    products
 SET
-    STATUS = $3,
+    "status" = $3,
     updated_at = NOW()
 WHERE
     id = $1
     AND organization_id = $2
 RETURNING
     id,
-    STATUS,
+    "status",
     updated_at;
 
 -- name: GetProductByID :one
@@ -44,7 +45,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -66,7 +67,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -88,7 +89,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -108,7 +109,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -117,7 +118,7 @@ FROM
     products
 WHERE
     id = $1
-    AND STATUS = 'active'
+    AND "status" = 'active'
 LIMIT
     1;
 
@@ -129,7 +130,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -138,7 +139,7 @@ FROM
     products
 WHERE
     slug = $1
-    AND STATUS = 'active'
+    AND "status" = 'active'
 LIMIT
     1;
 
@@ -150,7 +151,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -158,11 +159,8 @@ SELECT
 FROM
     products
 WHERE
-    STATUS = 'active'
-    AND (
-        created_at,
-        id
-    ) < (
+    "status" = 'active'
+    AND (created_at, id) < (
         sqlc.arg ('after_created_at')::TIMESTAMPTZ,
         sqlc.arg ('after_id')::UUID
     )

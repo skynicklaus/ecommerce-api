@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS products (
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
     description JSONB NOT NULL,
-    STATUS TEXT NOT NULL DEFAULT 'draft',
+    "status" TEXT NOT NULL DEFAULT 'draft',
     specification JSONB,
     is_featured BOOL NOT NULL DEFAULT FALSE,
     idempotency_key TEXT,
