@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AssignAttributeValueToProductVariant(ctx context.Context, arg AssignAttributeValueToProductVariantParams) error
 	AssignRoleToMember(ctx context.Context, arg AssignRoleToMemberParams) error
+	CountPlatformAdmins(ctx context.Context) (int64, error)
 	CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error)
 	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (Attribute, error)
 	CreateAttributeValue(ctx context.Context, arg CreateAttributeValueParams) (AttributeValue, error)
@@ -27,16 +28,25 @@ type Querier interface {
 	CreateProductAsset(ctx context.Context, arg CreateProductAssetParams) (ProductAsset, error)
 	CreateProductVariant(ctx context.Context, arg CreateProductVariantParams) (ProductVariant, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserAccount(ctx context.Context, arg CreateUserAccountParams) (CreateUserAccountRow, error)
 	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
+	DeleteAllOtherSessionsByIdentity(ctx context.Context, arg DeleteAllOtherSessionsByIdentityParams) error
+	DeleteAllSessionsByIdentity(ctx context.Context, identityID uuid.UUID) error
+	DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) error
+	DeleteSessionByToken(ctx context.Context, token string) error
 	GetActiveProductByID(ctx context.Context, id uuid.UUID) (GetActiveProductByIDRow, error)
 	GetActiveProductBySlug(ctx context.Context, slug string) (GetActiveProductBySlugRow, error)
 	GetAddressByID(ctx context.Context, id uuid.UUID) (GetAddressByIDRow, error)
 	GetCategoryByID(ctx context.Context, id uuid.UUID) (Category, error)
 	GetCustomerAccountByID(ctx context.Context, customerID uuid.UUID) (GetCustomerAccountByIDRow, error)
 	GetCustomerByEmail(ctx context.Context, email string) (Customer, error)
+	GetCustomerByIdentityID(ctx context.Context, identityID uuid.UUID) (Customer, error)
 	GetCustomerHashedPassword(ctx context.Context, arg GetCustomerHashedPasswordParams) (*string, error)
+	GetCustomerWithCredential(ctx context.Context, email string) (GetCustomerWithCredentialRow, error)
+	GetIdentity(ctx context.Context, id uuid.UUID) (Identity, error)
+	GetMemberByIdentityID(ctx context.Context, identityID uuid.UUID) (Member, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetProductByID(ctx context.Context, id uuid.UUID) (GetProductByIDRow, error)
@@ -45,9 +55,12 @@ type Querier interface {
 	GetProductVariantByID(ctx context.Context, id uuid.UUID) (ProductVariant, error)
 	GetRoleByID(ctx context.Context, id int16) (Role, error)
 	GetRoleBySlug(ctx context.Context, slug string) (Role, error)
+	GetSessionWithIdentity(ctx context.Context, token string) (GetSessionWithIdentityRow, error)
 	GetUserAccountByID(ctx context.Context, userID uuid.UUID) (GetUserAccountByIDRow, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByIdentityID(ctx context.Context, identityID uuid.UUID) (User, error)
 	GetUserHashedPassword(ctx context.Context, arg GetUserHashedPasswordParams) (*string, error)
+	GetUserWithCredential(ctx context.Context, email string) (GetUserWithCredentialRow, error)
 	GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error)
 	ListActiveProductsAfter(ctx context.Context, arg ListActiveProductsAfterParams) ([]ListActiveProductsAfterRow, error)
 	ListOrganizationRolesByType(ctx context.Context, arg ListOrganizationRolesByTypeParams) ([]Role, error)
@@ -56,8 +69,10 @@ type Querier interface {
 	ListProductVariantsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductVariant, error)
 	ListProductVariantsByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ProductVariant, error)
 	ListProductsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListProductsByOrganizationRow, error)
+	ListSessionsByIdentity(ctx context.Context, identityID uuid.UUID) ([]ListSessionsByIdentityRow, error)
 	ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error)
 	ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error)
+	RenewSession(ctx context.Context, arg RenewSessionParams) error
 	UpdateCustomerAccount(ctx context.Context, arg UpdateCustomerAccountParams) (UpdateCustomerAccountRow, error)
 	UpdateProductStatus(ctx context.Context, arg UpdateProductStatusParams) (UpdateProductStatusRow, error)
 	UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) (UpdateUserAccountRow, error)
