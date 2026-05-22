@@ -400,6 +400,7 @@ func (h *V1Handler) processVideoUpload(
 }
 
 func (h *V1Handler) deleteTempObject(ctx context.Context, key string) {
+	//nolint:mnd // Fixed timeout duration
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 
