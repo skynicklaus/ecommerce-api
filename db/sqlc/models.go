@@ -138,6 +138,7 @@ type Product struct {
 	IsFeatured     bool      `json:"is_featured"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+	IdempotencyKey *string   `json:"idempotency_key"`
 }
 
 type ProductAsset struct {
