@@ -1,6 +1,7 @@
 [tools]
 air = "latest"
 go = "latest"
+golangci-lint = "latest"
 sqlc = "latest"
 
 [env]
@@ -13,6 +14,10 @@ run = "air"
 [tasks.sqlc]
 description = "Generate type-safe Go code from SQL"
 run = "sqlc generate"
+
+[tasks.lint]
+description = "Run linter"
+run = "golangci-lint run ./..."
 
 [tasks.test]
 description = "Run unit tests"
