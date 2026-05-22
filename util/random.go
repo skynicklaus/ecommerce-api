@@ -18,7 +18,7 @@ import (
 func GetRandomIdentityType(t *testing.T) string {
 	t.Helper()
 
-	identityTypes := []string{"user", "customer"}
+	identityTypes := []string{string(IdentityUser), string(IdentityCustomer)}
 
 	n := big.NewInt(int64(len(identityTypes)))
 
