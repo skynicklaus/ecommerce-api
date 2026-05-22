@@ -7,11 +7,13 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createIdentity = `-- name: CreateIdentity :one
 INSERT INTO
-    identities (TYPE)
+    identities ("type")
 VALUES
     ($1)
 RETURNING
@@ -20,6 +22,26 @@ RETURNING
 
 func (q *Queries) CreateIdentity(ctx context.Context, type_ string) (Identity, error) {
 	row := q.db.QueryRow(ctx, createIdentity, type_)
+	var i Identity
+	err := row.Scan(&i.ID, &i.Type, &i.CreatedAt)
+	return i, err
+}
+
+const getIdentity = `-- name: GetIdentity :one
+SELECT
+    id,
+    "type",
+    created_at
+FROM
+    identities
+WHERE
+    id = $1
+LIMIT
+    1
+`
+
+func (q *Queries) GetIdentity(ctx context.Context, id uuid.UUID) (Identity, error) {
+	row := q.db.QueryRow(ctx, getIdentity, id)
 	var i Identity
 	err := row.Scan(&i.ID, &i.Type, &i.CreatedAt)
 	return i, err
