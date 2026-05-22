@@ -1,3 +1,5 @@
+//go:build integration
+
 package db_test
 
 import (
@@ -30,5 +32,7 @@ func TestMain(m *testing.M) {
 
 	testStore = db.NewStore(connPool)
 
-	os.Exit(m.Run())
+	code := m.Run()
+	connPool.Close()
+	os.Exit(code)
 }
