@@ -1,8 +1,9 @@
+//go:build integration
+
 //nolint:exhaustruct // test file
 package db_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -15,6 +16,11 @@ import (
 )
 
 func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
+	ctx := t.Context()
+
+	individualRole, err := testStore.GetRoleBySlug(ctx, "individual.owner")
+	require.NoError(t, err)
+
 	tests := []struct {
 		name     string
 		arg      db.CustomerRegistrationTxParams
@@ -25,7 +31,7 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 		{
 			name: "credential/success",
 			arg: db.CustomerRegistrationTxParams{
-				RoleID:               1,
+				RoleID:               individualRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypeIndividual),
 				UserInfo: db.UserInfo{
 					Name:  util.GetRandomString(t, 8),
@@ -71,7 +77,7 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 		{
 			name: "oauth/success",
 			arg: db.CustomerRegistrationTxParams{
-				RoleID:               1,
+				RoleID:               individualRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypeIndividual),
 				UserInfo: db.UserInfo{
 					Name:  util.GetRandomString(t, 8),
@@ -194,7 +200,7 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := testStore.CustomerRegistrationTx(context.Background(), tt.arg)
+			got, err := testStore.CustomerRegistrationTx(t.Context(), tt.arg)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -211,6 +217,7 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 }
 
 func getRandomMemberID(t *testing.T) *uuid.UUID {
+	t.Helper()
 	member := createRandomMember(t)
 
 	return &member.ID

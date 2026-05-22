@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 )
 
 func randomAssignAttributeValueToProductVariant(t *testing.T, organization db.Organization) {
+	t.Helper()
 	n := util.CoinFlip(t)
 	var org *db.Organization
 	if n == 1 {
@@ -25,7 +27,7 @@ func randomAssignAttributeValueToProductVariant(t *testing.T, organization db.Or
 		AttributeValueID: attributeValue.ID,
 	}
 
-	err := testStore.AssignAttributeValueToProductVariant(context.Background(), arg)
+	err := testStore.AssignAttributeValueToProductVariant(t.Context(), arg)
 	require.NoError(t, err)
 }
 

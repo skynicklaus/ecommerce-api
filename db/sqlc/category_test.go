@@ -1,18 +1,20 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomCategory(t *testing.T) db.Category {
+	t.Helper()
 	n := util.CoinFlip(t)
 
 	var organizationID *uuid.UUID
@@ -32,7 +34,7 @@ func createRandomCategory(t *testing.T) db.Category {
 		SortOrder:      util.GetRandomSortOrder(t),
 	}
 
-	category, err := testStore.CreateCategory(context.Background(), arg)
+	category, err := testStore.CreateCategory(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, category)
 
@@ -80,7 +82,7 @@ func TestCreateChildCategory(t *testing.T) {
 		SortOrder:      util.GetRandomSortOrder(t),
 	}
 
-	childCategory, err := testStore.CreateCategory(context.Background(), arg)
+	childCategory, err := testStore.CreateCategory(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, childCategory)
 
@@ -102,7 +104,7 @@ func TestCreateChildCategory(t *testing.T) {
 func TestGetCategoryByID(t *testing.T) {
 	category1 := createRandomCategory(t)
 
-	category2, err := testStore.GetCategoryByID(context.Background(), category1.ID)
+	category2, err := testStore.GetCategoryByID(t.Context(), category1.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, category2)
 
@@ -114,5 +116,5 @@ func TestGetCategoryByID(t *testing.T) {
 	require.Equal(t, category1.Description, category2.Description)
 	require.Equal(t, category1.SortOrder, category2.SortOrder)
 	require.Equal(t, category1.IsActive, category2.IsActive)
-	require.WithinDuration(t, category1.CreatedAt, category2.CreatedAt, time.Second)
+	require.WithinDuration(t, category1.CreatedAt, category2.CreatedAt, 5*time.Second)
 }

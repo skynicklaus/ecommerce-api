@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -9,13 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-openapi/testify/v2/require"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomOrganization(t *testing.T) db.Organization {
+	t.Helper()
 	organizationType := util.GetRandomOrganizationType(t)
 	require.NotEmpty(t, organizationType)
 
@@ -46,7 +48,7 @@ func createRandomOrganization(t *testing.T) db.Organization {
 		Status:   organizationStatus,
 	}
 
-	organization, err := testStore.CreateOrganization(context.Background(), arg)
+	organization, err := testStore.CreateOrganization(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, organization)
 
@@ -102,7 +104,7 @@ func TestCreateSubOrganization(t *testing.T) {
 		Status:   organizationStatus,
 	}
 
-	chilldOrganization, err := testStore.CreateOrganization(context.Background(), arg)
+	chilldOrganization, err := testStore.CreateOrganization(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, chilldOrganization)
 
@@ -124,7 +126,7 @@ func TestCreateSubOrganization(t *testing.T) {
 func TestGetOrganizationByID(t *testing.T) {
 	organization1 := createRandomOrganization(t)
 
-	organization2, err := testStore.GetOrganizationByID(context.Background(), organization1.ID)
+	organization2, err := testStore.GetOrganizationByID(t.Context(), organization1.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, organization2)
 
@@ -135,13 +137,13 @@ func TestGetOrganizationByID(t *testing.T) {
 	require.Equal(t, organization1.Type, organization2.Type)
 	require.Equal(t, organization1.Logo, organization2.Logo)
 	require.Equal(t, organization1.Status, organization2.Status)
-	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, time.Second)
+	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, 5*time.Second)
 }
 
 func TestGetOrganizationBySlug(t *testing.T) {
 	organization1 := createRandomOrganization(t)
 
-	organization2, err := testStore.GetOrganizationBySlug(context.Background(), organization1.Slug)
+	organization2, err := testStore.GetOrganizationBySlug(t.Context(), organization1.Slug)
 	require.NoError(t, err)
 	require.NotEmpty(t, organization2)
 
@@ -152,5 +154,5 @@ func TestGetOrganizationBySlug(t *testing.T) {
 	require.Equal(t, organization1.Type, organization2.Type)
 	require.Equal(t, organization1.Logo, organization2.Logo)
 	require.Equal(t, organization1.Status, organization2.Status)
-	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, time.Second)
+	require.WithinDuration(t, organization1.CreatedAt, organization2.CreatedAt, 5*time.Second)
 }

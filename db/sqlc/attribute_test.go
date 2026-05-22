@@ -1,17 +1,19 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomAttributeWithOrg(t *testing.T, organization *db.Organization) db.Attribute {
+	t.Helper()
 	var organizationID *uuid.UUID
 	if organization != nil {
 		organizationID = &organization.ID
@@ -24,7 +26,7 @@ func createRandomAttributeWithOrg(t *testing.T, organization *db.Organization) d
 		Type:           util.GetRandomString(t, 8),
 	}
 
-	attribute, err := testStore.CreateAttribute(context.Background(), arg)
+	attribute, err := testStore.CreateAttribute(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, attribute)
 
@@ -42,6 +44,7 @@ func createRandomAttributeWithOrg(t *testing.T, organization *db.Organization) d
 }
 
 func createRandomAttribute(t *testing.T) db.Attribute {
+	t.Helper()
 	n := util.CoinFlip(t)
 	if n == 1 {
 		org := createRandomOrganization(t)

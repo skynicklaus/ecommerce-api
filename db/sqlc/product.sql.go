@@ -26,7 +26,7 @@ INSERT INTO
 VALUES
     ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
-    id, organization_id, category_id, name, slug, description, status, specification, is_featured, created_at, updated_at, idempotency_key
+    id, organization_id, category_id, name, slug, description, status, specification, is_featured, idempotency_key, created_at, updated_at
 `
 
 type CreateProductParams struct {
@@ -60,9 +60,9 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.Status,
 		&i.Specification,
 		&i.IsFeatured,
+		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -75,7 +75,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -84,7 +84,7 @@ FROM
     products
 WHERE
     id = $1
-    AND STATUS = 'active'
+    AND "status" = 'active'
 LIMIT
     1
 `
@@ -130,7 +130,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -139,7 +139,7 @@ FROM
     products
 WHERE
     slug = $1
-    AND STATUS = 'active'
+    AND "status" = 'active'
 LIMIT
     1
 `
@@ -185,7 +185,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -235,7 +235,7 @@ func (q *Queries) GetProductByID(ctx context.Context, id uuid.UUID) (GetProductB
 
 const getProductByIdempotencyKey = `-- name: GetProductByIdempotencyKey :one
 SELECT
-    id, organization_id, category_id, name, slug, description, status, specification, is_featured, created_at, updated_at, idempotency_key
+    id, organization_id, category_id, name, slug, description, status, specification, is_featured, idempotency_key, created_at, updated_at
 FROM
     products
 WHERE
@@ -261,9 +261,9 @@ func (q *Queries) GetProductByIdempotencyKey(ctx context.Context, arg GetProduct
 		&i.Status,
 		&i.Specification,
 		&i.IsFeatured,
+		&i.IdempotencyKey,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.IdempotencyKey,
 	)
 	return i, err
 }
@@ -276,7 +276,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -332,7 +332,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -340,11 +340,8 @@ SELECT
 FROM
     products
 WHERE
-    STATUS = 'active'
-    AND (
-        created_at,
-        id
-    ) < (
+    "status" = 'active'
+    AND (created_at, id) < (
         $1::TIMESTAMPTZ,
         $2::UUID
     )
@@ -415,7 +412,7 @@ SELECT
     name,
     slug,
     description,
-    STATUS,
+    "status",
     is_featured,
     specification,
     created_at,
@@ -475,16 +472,17 @@ func (q *Queries) ListProductsByOrganization(ctx context.Context, organizationID
 }
 
 const updateProductStatus = `-- name: UpdateProductStatus :one
-UPDATE products
+UPDATE
+    products
 SET
-    STATUS = $3,
+    "status" = $3,
     updated_at = NOW()
 WHERE
     id = $1
     AND organization_id = $2
 RETURNING
     id,
-    STATUS,
+    "status",
     updated_at
 `
 

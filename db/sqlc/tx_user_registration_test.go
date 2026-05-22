@@ -1,8 +1,9 @@
+//go:build integration
+
 //nolint:exhaustruct // test file
 package db_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,9 +14,17 @@ import (
 )
 
 func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
-	organization, orgErr := testStore.GetOrganizationBySlug(context.Background(), "platform")
+	ctx := t.Context()
+
+	organization, orgErr := testStore.GetOrganizationBySlug(ctx, string(util.OrganizationTypePlatform))
 	require.NoError(t, orgErr)
 	require.NotEmpty(t, organization)
+
+	platformRole, roleErr := testStore.GetRoleBySlug(ctx, "platform.owner")
+	require.NoError(t, roleErr)
+
+	individualRole, roleErr := testStore.GetRoleBySlug(ctx, "individual.owner")
+	require.NoError(t, roleErr)
 
 	tests := []struct {
 		name     string
@@ -27,7 +36,7 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 		{
 			name: "credential/success",
 			arg: db.PlatformUserRegistrationTxParams{
-				RoleID:               1,
+				RoleID:               platformRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypePlatform),
 				RoleAssignBy:         getRandomMemberID(t),
 				OrganizationID:       organization.ID,
@@ -61,7 +70,7 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 		{
 			name: "oauth/success",
 			arg: db.PlatformUserRegistrationTxParams{
-				RoleID:               1,
+				RoleID:               platformRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypePlatform),
 				RoleAssignBy:         getRandomMemberID(t),
 				OrganizationID:       organization.ID,
@@ -117,7 +126,7 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 		{
 			name: "organization.mismatched/fail",
 			arg: db.PlatformUserRegistrationTxParams{
-				RoleID:               7,
+				RoleID:               individualRole.ID,
 				RoleOrganizationType: string(util.OrganizationTypeIndividual),
 				RoleAssignBy:         getRandomMemberID(t),
 				OrganizationID:       organization.ID,
@@ -142,7 +151,7 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := testStore.PlatformUserRegistrationTx(context.Background(), tt.arg)
+			got, err := testStore.PlatformUserRegistrationTx(t.Context(), tt.arg)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -229,7 +238,7 @@ func TestSQLStore_UserRegistrationTx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := testStore.UserRegistrationTx(context.Background(), tt.arg)
+			got, err := testStore.UserRegistrationTx(t.Context(), tt.arg)
 
 			if tt.wantErr {
 				require.Error(t, err)

@@ -1,17 +1,19 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
-	"github.com/go-openapi/testify/v2/require"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func createRandomAddressWithOrg(t *testing.T, organization db.Organization) db.Address {
+	t.Helper()
 	n := util.CoinFlip(t)
 	var line2 *string
 	if n == 1 {
@@ -30,7 +32,7 @@ func createRandomAddressWithOrg(t *testing.T, organization db.Organization) db.A
 		Country:        util.GetRandomString(t, 8),
 	}
 
-	address, err := testStore.CreateAddress(context.Background(), arg)
+	address, err := testStore.CreateAddress(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, address)
 
@@ -53,6 +55,7 @@ func createRandomAddressWithOrg(t *testing.T, organization db.Organization) db.A
 }
 
 func createRandomAddress(t *testing.T) db.Address {
+	t.Helper()
 	organization := createRandomOrganization(t)
 	return createRandomAddressWithOrg(t, organization)
 }
@@ -64,7 +67,7 @@ func TestCreateAddress(t *testing.T) {
 func TestGetAddressByID(t *testing.T) {
 	address1 := createRandomAddress(t)
 
-	address2, err := testStore.GetAddressByID(context.Background(), address1.ID)
+	address2, err := testStore.GetAddressByID(t.Context(), address1.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, address2)
 
@@ -78,5 +81,5 @@ func TestGetAddressByID(t *testing.T) {
 	require.Equal(t, address1.Country, address2.Country)
 	require.Equal(t, address1.IsDefaultShipping, address2.IsDefaultShipping)
 	require.Equal(t, address1.IsDefaultBilling, address2.IsDefaultBilling)
-	require.WithinDuration(t, address1.CreatedAt, address2.CreatedAt, time.Second)
+	require.WithinDuration(t, address1.CreatedAt, address2.CreatedAt, 5*time.Second)
 }

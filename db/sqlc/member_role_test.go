@@ -1,18 +1,20 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"crypto/rand"
 	"math/big"
 	"testing"
 
-	"github.com/go-openapi/testify/v2/require"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 )
 
 func randomAssignRoleToMember(t *testing.T) {
+	t.Helper()
 	member := createRandomMember(t)
 	role := createRandomRole(t)
 
@@ -32,10 +34,10 @@ func randomAssignRoleToMember(t *testing.T) {
 		AssignedBy: uuid,
 	}
 
-	err = testStore.AssignRoleToMember(context.Background(), arg)
+	err = testStore.AssignRoleToMember(t.Context(), arg)
 	require.NoError(t, err)
 }
 
-func TestAssignToleToMember(t *testing.T) {
+func TestAssignRoleToMember(t *testing.T) {
 	randomAssignRoleToMember(t)
 }

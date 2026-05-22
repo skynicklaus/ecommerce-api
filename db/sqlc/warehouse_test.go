@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 )
 
 func createRandomWarehouseWithOrg(t *testing.T, organization db.Organization) db.Warehouse {
+	t.Helper()
 	address := createRandomAddressWithOrg(t, organization)
 
 	arg := db.CreateWarehouseParams{
@@ -19,7 +21,7 @@ func createRandomWarehouseWithOrg(t *testing.T, organization db.Organization) db
 		Name:           util.GetRandomString(t, 8),
 	}
 
-	warehouse, err := testStore.CreateWarehouse(context.Background(), arg)
+	warehouse, err := testStore.CreateWarehouse(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, warehouse)
 
@@ -31,6 +33,7 @@ func createRandomWarehouseWithOrg(t *testing.T, organization db.Organization) db
 }
 
 func createRandomWarehouse(t *testing.T) db.Warehouse {
+	t.Helper()
 	organization := createRandomOrganization(t)
 	return createRandomWarehouseWithOrg(t, organization)
 }

@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,6 +12,7 @@ import (
 )
 
 func createRandomInventoryWithOrg(t *testing.T, organization db.Organization) db.Inventory {
+	t.Helper()
 	warehouse := createRandomWarehouseWithOrg(t, organization)
 	productVariant := createRandomProductVariantWithOrg(t, organization)
 
@@ -27,7 +29,7 @@ func createRandomInventoryWithOrg(t *testing.T, organization db.Organization) db
 		LowStockThreshold: lowStockThreashold,
 	}
 
-	inventory, err := testStore.CreateInventory(context.Background(), arg)
+	inventory, err := testStore.CreateInventory(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, inventory)
 
@@ -45,6 +47,7 @@ func createRandomInventoryWithOrg(t *testing.T, organization db.Organization) db
 }
 
 func createRandomInventory(t *testing.T) db.Inventory {
+	t.Helper()
 	organization := createRandomOrganization(t)
 	return createRandomInventoryWithOrg(t, organization)
 }
@@ -57,7 +60,7 @@ func TestGetWarehouseVariantInventory(t *testing.T) {
 	inventory1 := createRandomInventory(t)
 
 	inventory2, err := testStore.GetWarehouseVariantInventory(
-		context.Background(),
+		t.Context(),
 		db.GetWarehouseVariantInventoryParams{
 			ProductVariantID: inventory1.ProductVariantID,
 			WarehouseID:      inventory1.WarehouseID,

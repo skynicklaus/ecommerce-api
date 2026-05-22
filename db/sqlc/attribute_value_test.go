@@ -1,7 +1,8 @@
+//go:build integration
+
 package db_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,7 @@ func createRandomAttributeValueWithOrg(
 	t *testing.T,
 	organization *db.Organization,
 ) db.AttributeValue {
+	t.Helper()
 	attribute := createRandomAttributeWithOrg(t, organization)
 
 	arg := db.CreateAttributeValueParams{
@@ -24,7 +26,7 @@ func createRandomAttributeValueWithOrg(
 		SortOrder:      util.GetRandomSortOrder(t),
 	}
 
-	attributeValue, err := testStore.CreateAttributeValue(context.Background(), arg)
+	attributeValue, err := testStore.CreateAttributeValue(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, attributeValue)
 
@@ -43,6 +45,7 @@ func createRandomAttributeValueWithOrg(
 }
 
 func createRandomAttributeValue(t *testing.T) db.AttributeValue {
+	t.Helper()
 	n := util.CoinFlip(t)
 	if n == 1 {
 		org := createRandomOrganization(t)
