@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,6 +14,7 @@ import (
 	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/handler"
 	midware "github.com/skynicklaus/ecommerce-api/internal/middleware"
+	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -28,8 +30,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 		RecoverPanics:      true,
 		LogRequestHeaders:  []string{"Origin"},
 		LogResponseHeaders: []string{},
-		LogRequestBody:     isDebugHeaderSet,
-		LogResponseBody:    isDebugHeaderSet,
+		LogRequestBody:     isDebugBodyLoggingAllowed,
+		LogResponseBody:    isDebugBodyLoggingAllowed,
 		LogExtraAttrs: func(req *http.Request, reqBody string, respStatus int) []slog.Attr {
 			if respStatus == 400 || respStatus == 422 {
 				req.Header.Del("Authorization")
@@ -41,6 +43,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	midware := midware.New(s.store)
 
+	r.Use(midware.SecurityHeaders)
+
 	v1Handler := handler.NewV1Handler(s.store, s.logger, s.redis, s.storage)
 
 	r.Get("/health", s.make(func(w http.ResponseWriter, _ *http.Request) error {
@@ -48,20 +52,58 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}))
 
 	r.Route("/v1", func(r chi.Router) {
-		r.Post("/users/platform", s.make(v1Handler.PlatformUserCredentialRegistration))
 		r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
+
+		// Open login routes.
+		r.Post("/auth/customer/login", s.make(v1Handler.LoginCustomer))
+		r.Post("/auth/merchant/login", s.make(v1Handler.LoginMerchant))
+		r.Post("/auth/admin/login", s.make(v1Handler.LoginAdmin))
 
 		// Storefront (buyer-facing) reads — public, cross-tenant, active products only.
 		r.Get("/products", s.make(v1Handler.ListProducts))
 		r.Get("/products/{slug_or_id}", s.make(v1Handler.GetProductDetails))
 
+		// Protected Customer Routes
 		r.Group(func(r chi.Router) {
+			r.Use(midware.RequireService(util.SessionServiceBuyerPlatform))
+
+			r.Post("/auth/customer/logout", s.make(v1Handler.Logout))
+			r.Get("/auth/customer/me", s.make(v1Handler.GetMe))
+			r.Get("/auth/customer/sessions", s.make(v1Handler.ListActiveSessions))
+			r.Delete("/auth/customer/sessions", s.make(v1Handler.RevokeOtherSessions))
+			r.Delete("/auth/customer/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
+		})
+
+		// Protected Merchant Routes
+		r.Group(func(r chi.Router) {
+			r.Use(midware.RequireService(util.SessionServiceMerchantPanel))
 			r.Use(midware.ValidateOrganization)
+
+			r.Post("/auth/merchant/logout", s.make(v1Handler.Logout))
+			r.Get("/auth/merchant/me", s.make(v1Handler.GetMe))
+			r.Get("/auth/merchant/sessions", s.make(v1Handler.ListActiveSessions))
+			r.Delete("/auth/merchant/sessions", s.make(v1Handler.RevokeOtherSessions))
+			r.Delete("/auth/merchant/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
 
 			r.Post("/product-assets", s.make(v1Handler.PreUploadAssets))
 			r.Post("/products", s.make(v1Handler.CreateProduct))
 			r.Patch("/products/{id}/status", s.make(v1Handler.UpdateProductStatus))
+		})
+
+		// Protected Platform Admin Routes
+		r.Group(func(r chi.Router) {
+			r.Use(midware.RequireService(util.SessionServiceAdminPanel))
+
+			r.Post("/auth/admin/logout", s.make(v1Handler.Logout))
+			r.Get("/auth/admin/me", s.make(v1Handler.GetMe))
+			r.Get("/auth/admin/sessions", s.make(v1Handler.ListActiveSessions))
+			r.Delete("/auth/admin/sessions", s.make(v1Handler.RevokeOtherSessions))
+			r.Delete("/auth/admin/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
+
+			// Platform admin creation is authenticated — first admin is bootstrapped
+			// via the migrate command using PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD.
+			r.Post("/users/platform", s.make(v1Handler.PlatformUserCredentialRegistration))
 		})
 	})
 
@@ -101,4 +143,11 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 
 func isDebugHeaderSet(r *http.Request) bool {
 	return r.Header.Get("Debug") == "reveal-body-logs"
+}
+
+// isDebugBodyLoggingAllowed enables request body logging for non-auth routes only.
+// Auth routes are excluded to prevent passwords from appearing in logs regardless
+// of the Debug header value.
+func isDebugBodyLoggingAllowed(r *http.Request) bool {
+	return isDebugHeaderSet(r) && !strings.HasPrefix(r.URL.Path, "/v1/auth/")
 }
