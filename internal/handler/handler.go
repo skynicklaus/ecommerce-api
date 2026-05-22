@@ -20,6 +20,9 @@ type Handler interface {
 
 	// Product
 	CreateProduct(http.ResponseWriter, *http.Request) error
+	UpdateProductStatus(http.ResponseWriter, *http.Request) error
+	GetProductDetails(http.ResponseWriter, *http.Request) error
+	ListProducts(http.ResponseWriter, *http.Request) error
 
 	// Product Asset
 	PreUploadAssets(http.ResponseWriter, *http.Request) error
