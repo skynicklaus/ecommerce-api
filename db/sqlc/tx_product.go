@@ -14,6 +14,7 @@ type CreateProductTxParams struct {
 	Slug           string
 	Description    []byte
 	Specification  []byte
+	IdempotencyKey *string
 	Variants       []ProductVariantParams
 	Assets         []ProductAssetParams
 }
@@ -122,6 +123,7 @@ func buildCreateProductParams(arg CreateProductTxParams) CreateProductParams {
 		Slug:           arg.Slug,
 		Description:    arg.Description,
 		Specification:  arg.Specification,
+		IdempotencyKey: arg.IdempotencyKey,
 	}
 }
 
