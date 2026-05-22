@@ -70,7 +70,7 @@ VALUES
     ) ON CONFLICT DO NOTHING;
 
 INSERT INTO
-    organizations (name, slug, TYPE, STATUS)
+    organizations (name, slug, "type", STATUS)
 VALUES
     ('Platform', 'platform', 'platform', 'active');
 

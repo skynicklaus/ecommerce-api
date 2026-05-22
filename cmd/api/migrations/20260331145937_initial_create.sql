@@ -34,7 +34,7 @@ GRANT USAGE ON SCHEMA public TO app_user;
 
 CREATE TABLE IF NOT EXISTS identities (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
-    TYPE TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT check_identity_type CHECK (TYPE IN ('user', 'customer'))
 );
@@ -129,13 +129,13 @@ CREATE TABLE IF NOT EXISTS organizations (
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
     STATUS TEXT NOT NULL,
-    TYPE TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     logo TEXT,
     metadata JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_organizations_parent_id FOREIGN KEY (parent_id) REFERENCES organizations (id) ON DELETE CASCADE,
     CONSTRAINT check_organization_type CHECK (
-        TYPE IN (
+        "type" IN (
             'platform',
             'merchant',
             'individual',
@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS member_roles (
 CREATE TABLE IF NOT EXISTS addresses (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
     organization_id UUID NOT NULL,
-    TYPE TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     label TEXT NOT NULL,
     line1 TEXT NOT NULL,
     line2 TEXT,
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS addresses (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_addresses_organization_id FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
     CONSTRAINT check_addresses_type CHECK (
-        TYPE IN (
+        "type" IN (
             'shipping',
             'billing',
             'warehouse',

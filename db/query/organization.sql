@@ -5,7 +5,7 @@ INSERT INTO
         name,
         slug,
         STATUS,
-        TYPE,
+        "type",
         metadata
     )
 VALUES
@@ -20,7 +20,7 @@ SELECT
     name,
     slug,
     STATUS,
-    TYPE,
+    "type",
     logo,
     metadata,
     created_at
@@ -40,7 +40,7 @@ SELECT
     name,
     slug,
     STATUS,
-    TYPE,
+    "type",
     logo,
     metadata,
     created_at

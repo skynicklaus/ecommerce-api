@@ -398,7 +398,7 @@ FROM
     AND p.organization_id IS NULL;
 
 INSERT INTO
-    attributes (organization_id, name, slug, TYPE)
+    attributes (organization_id, name, slug, "type")
 VALUES
     -- universal
     (NULL, 'Material', 'material', 'select'),

@@ -26,7 +26,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organizations_parent_id ON organizat
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_organizations_slug_unique ON organizations (slug);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_type ON organizations (TYPE);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_organization_type ON organizations ("type");
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_members_identity_id ON members (identity_id);
 

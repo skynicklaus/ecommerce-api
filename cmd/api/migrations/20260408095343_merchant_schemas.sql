@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS product_assets (
     product_id UUID NOT NULL,
     product_variant_id UUID,
     asset_key TEXT NOT NULL,
-    TYPE TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     mime_type TEXT NOT NULL,
     alt_text TEXT,
     sort_order SMALLINT NOT NULL DEFAULT 0,
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS product_assets (
     CONSTRAINT fk_product_assets_product_id FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE,
     CONSTRAINT fk_product_assets_product_variant_id FOREIGN KEY (product_variant_id) REFERENCES product_variants (id) ON DELETE CASCADE,
     CONSTRAINT check_product_assets_type CHECK (
-        TYPE IN (
+        "type" IN (
             'image',
             'video',
             'document'
@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS product_assets (
     ),
     CONSTRAINT check_primary_only_on_images CHECK (
         is_primary = FALSE
-        OR TYPE = 'image'
+        OR "type" = 'image'
     )
 );
 
@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS attributes (
     organization_id UUID,
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
-    TYPE TEXT NOT NULL,
+    "type" TEXT NOT NULL,
     CONSTRAINT fk_attributes_organization_id FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
 );
 

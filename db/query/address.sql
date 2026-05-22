@@ -2,7 +2,7 @@
 INSERT INTO
     addresses (
         organization_id,
-        TYPE,
+        "type",
         label,
         line1,
         line2,
@@ -20,7 +20,7 @@ RETURNING
 SELECT
     id,
     organization_id,
-    TYPE,
+    "type",
     label,
     line1,
     line2,

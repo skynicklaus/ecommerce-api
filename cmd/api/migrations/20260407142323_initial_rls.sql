@@ -99,7 +99,7 @@ SET
 CREATE POLICY org_isolation_read ON organizations FOR
 SELECT
     USING (
-        TYPE = 'merchant'
+        "type" = 'merchant'
         OR id = current_org_id()
         OR is_platform_user()
     );
