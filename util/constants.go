@@ -1,11 +1,24 @@
 package util
 
+import "time"
+
 type IdentityType string
 
 const (
 	IdentityUser     IdentityType = "user"
 	IdentityCustomer IdentityType = "customer"
 )
+
+type SessionService string
+
+const (
+	SessionServiceAdminPanel    SessionService = "admin_panel"
+	SessionServiceMerchantPanel SessionService = "merchant_panel"
+	SessionServiceBuyerPlatform SessionService = "buyer_platform"
+)
+
+// SessionTTL is the lifetime of a newly created or renewed session.
+const SessionTTL = 7 * 24 * time.Hour
 
 type OrganizationType string
 
