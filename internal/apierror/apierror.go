@@ -40,7 +40,7 @@ func ErrValidation(err error) APIError {
 }
 
 func Write(w http.ResponseWriter, err APIError) {
-	w.WriteHeader(err.StatusCode)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(err.StatusCode)
 	_ = json.NewEncoder(w).Encode(err)
 }
