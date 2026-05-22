@@ -30,3 +30,115 @@ func (q *Queries) AssignAttributeValueToProductVariant(ctx context.Context, arg 
 	_, err := q.db.Exec(ctx, assignAttributeValueToProductVariant, arg.ProductVariantID, arg.AttributeValueID)
 	return err
 }
+
+const listVariantAttributesByProduct = `-- name: ListVariantAttributesByProduct :many
+SELECT
+    pva.product_variant_id,
+    av.id AS attribute_value_id,
+    av.value AS attribute_value,
+    av.label AS attribute_value_label,
+    a.id AS attribute_id,
+    a.name AS attribute_name,
+    a.slug AS attribute_slug
+FROM
+    product_variant_attributes pva
+    JOIN attribute_values av ON pva.attribute_value_id = av.id
+    JOIN attributes a ON av.attribute_id = a.id
+    JOIN product_variants pv ON pva.product_variant_id = pv.id
+WHERE
+    pv.product_id = $1
+`
+
+type ListVariantAttributesByProductRow struct {
+	ProductVariantID    uuid.UUID `json:"product_variant_id"`
+	AttributeValueID    int64     `json:"attribute_value_id"`
+	AttributeValue      string    `json:"attribute_value"`
+	AttributeValueLabel string    `json:"attribute_value_label"`
+	AttributeID         int64     `json:"attribute_id"`
+	AttributeName       string    `json:"attribute_name"`
+	AttributeSlug       string    `json:"attribute_slug"`
+}
+
+func (q *Queries) ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error) {
+	rows, err := q.db.Query(ctx, listVariantAttributesByProduct, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVariantAttributesByProductRow{}
+	for rows.Next() {
+		var i ListVariantAttributesByProductRow
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.AttributeValueID,
+			&i.AttributeValue,
+			&i.AttributeValueLabel,
+			&i.AttributeID,
+			&i.AttributeName,
+			&i.AttributeSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVariantAttributesByProductIDs = `-- name: ListVariantAttributesByProductIDs :many
+SELECT
+    pva.product_variant_id,
+    av.id AS attribute_value_id,
+    av.value AS attribute_value,
+    av.label AS attribute_value_label,
+    a.id AS attribute_id,
+    a.name AS attribute_name,
+    a.slug AS attribute_slug
+FROM
+    product_variant_attributes pva
+    JOIN attribute_values av ON pva.attribute_value_id = av.id
+    JOIN attributes a ON av.attribute_id = a.id
+    JOIN product_variants pv ON pva.product_variant_id = pv.id
+WHERE
+    pv.product_id = ANY ($1::UUID [])
+`
+
+type ListVariantAttributesByProductIDsRow struct {
+	ProductVariantID    uuid.UUID `json:"product_variant_id"`
+	AttributeValueID    int64     `json:"attribute_value_id"`
+	AttributeValue      string    `json:"attribute_value"`
+	AttributeValueLabel string    `json:"attribute_value_label"`
+	AttributeID         int64     `json:"attribute_id"`
+	AttributeName       string    `json:"attribute_name"`
+	AttributeSlug       string    `json:"attribute_slug"`
+}
+
+func (q *Queries) ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error) {
+	rows, err := q.db.Query(ctx, listVariantAttributesByProductIDs, productIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVariantAttributesByProductIDsRow{}
+	for rows.Next() {
+		var i ListVariantAttributesByProductIDsRow
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.AttributeValueID,
+			&i.AttributeValue,
+			&i.AttributeValueLabel,
+			&i.AttributeID,
+			&i.AttributeName,
+			&i.AttributeSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

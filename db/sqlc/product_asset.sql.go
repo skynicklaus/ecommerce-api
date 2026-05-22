@@ -69,3 +69,106 @@ func (q *Queries) CreateProductAsset(ctx context.Context, arg CreateProductAsset
 	)
 	return i, err
 }
+
+const listProductAssetsByProductID = `-- name: ListProductAssetsByProductID :many
+SELECT
+    id,
+    product_id,
+    product_variant_id,
+    asset_key,
+    type,
+    mime_type,
+    alt_text,
+    sort_order,
+    is_primary,
+    duration_seconds
+FROM
+    product_assets
+WHERE
+    product_id = $1
+ORDER BY
+    sort_order
+`
+
+func (q *Queries) ListProductAssetsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductAsset, error) {
+	rows, err := q.db.Query(ctx, listProductAssetsByProductID, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProductAsset{}
+	for rows.Next() {
+		var i ProductAsset
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ProductVariantID,
+			&i.AssetKey,
+			&i.Type,
+			&i.MimeType,
+			&i.AltText,
+			&i.SortOrder,
+			&i.IsPrimary,
+			&i.DurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProductAssetsByProductIDs = `-- name: ListProductAssetsByProductIDs :many
+SELECT
+    id,
+    product_id,
+    product_variant_id,
+    asset_key,
+    type,
+    mime_type,
+    alt_text,
+    sort_order,
+    is_primary,
+    duration_seconds
+FROM
+    product_assets
+WHERE
+    product_id = ANY ($1::UUID [])
+ORDER BY
+    product_id,
+    sort_order
+`
+
+func (q *Queries) ListProductAssetsByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ProductAsset, error) {
+	rows, err := q.db.Query(ctx, listProductAssetsByProductIDs, productIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProductAsset{}
+	for rows.Next() {
+		var i ProductAsset
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.ProductVariantID,
+			&i.AssetKey,
+			&i.Type,
+			&i.MimeType,
+			&i.AltText,
+			&i.SortOrder,
+			&i.IsPrimary,
+			&i.DurationSeconds,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

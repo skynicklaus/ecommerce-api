@@ -20,12 +20,13 @@ INSERT INTO
         name,
         slug,
         description,
-        specification
+        specification,
+        idempotency_key
     )
 VALUES
-    ($1, $2, $3, $4, $5, $6)
+    ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
-    id, organization_id, category_id, name, slug, description, status, specification, is_featured, created_at, updated_at
+    id, organization_id, category_id, name, slug, description, status, specification, is_featured, created_at, updated_at, idempotency_key
 `
 
 type CreateProductParams struct {
@@ -35,6 +36,7 @@ type CreateProductParams struct {
 	Slug           string    `json:"slug"`
 	Description    []byte    `json:"description"`
 	Specification  []byte    `json:"specification"`
+	IdempotencyKey *string   `json:"idempotency_key"`
 }
 
 func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (Product, error) {
@@ -45,6 +47,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		arg.Slug,
 		arg.Description,
 		arg.Specification,
+		arg.IdempotencyKey,
 	)
 	var i Product
 	err := row.Scan(
@@ -57,6 +60,117 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.Status,
 		&i.Specification,
 		&i.IsFeatured,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
+const getActiveProductByID = `-- name: GetActiveProductByID :one
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    STATUS,
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    id = $1
+    AND STATUS = 'active'
+LIMIT
+    1
+`
+
+type GetActiveProductByIDRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetActiveProductByID(ctx context.Context, id uuid.UUID) (GetActiveProductByIDRow, error) {
+	row := q.db.QueryRow(ctx, getActiveProductByID, id)
+	var i GetActiveProductByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.IsFeatured,
+		&i.Specification,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getActiveProductBySlug = `-- name: GetActiveProductBySlug :one
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    STATUS,
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    slug = $1
+    AND STATUS = 'active'
+LIMIT
+    1
+`
+
+type GetActiveProductBySlugRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetActiveProductBySlug(ctx context.Context, slug string) (GetActiveProductBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getActiveProductBySlug, slug)
+	var i GetActiveProductBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.IsFeatured,
+		&i.Specification,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -116,5 +230,279 @@ func (q *Queries) GetProductByID(ctx context.Context, id uuid.UUID) (GetProductB
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getProductByIdempotencyKey = `-- name: GetProductByIdempotencyKey :one
+SELECT
+    id, organization_id, category_id, name, slug, description, status, specification, is_featured, created_at, updated_at, idempotency_key
+FROM
+    products
+WHERE
+    organization_id = $1
+    AND idempotency_key = $2
+`
+
+type GetProductByIdempotencyKeyParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	IdempotencyKey *string   `json:"idempotency_key"`
+}
+
+func (q *Queries) GetProductByIdempotencyKey(ctx context.Context, arg GetProductByIdempotencyKeyParams) (Product, error) {
+	row := q.db.QueryRow(ctx, getProductByIdempotencyKey, arg.OrganizationID, arg.IdempotencyKey)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.Specification,
+		&i.IsFeatured,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.IdempotencyKey,
+	)
+	return i, err
+}
+
+const getProductBySlug = `-- name: GetProductBySlug :one
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    STATUS,
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    slug = $1
+ORDER BY
+    id
+LIMIT
+    1
+`
+
+type GetProductBySlugRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) GetProductBySlug(ctx context.Context, slug string) (GetProductBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getProductBySlug, slug)
+	var i GetProductBySlugRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.IsFeatured,
+		&i.Specification,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listActiveProductsAfter = `-- name: ListActiveProductsAfter :many
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    STATUS,
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    STATUS = 'active'
+    AND (
+        created_at,
+        id
+    ) < (
+        $1::TIMESTAMPTZ,
+        $2::UUID
+    )
+ORDER BY
+    created_at DESC,
+    id DESC
+LIMIT
+    $3::INT
+`
+
+type ListActiveProductsAfterParams struct {
+	AfterCreatedAt time.Time `json:"after_created_at"`
+	AfterID        uuid.UUID `json:"after_id"`
+	PageLimit      int32     `json:"page_limit"`
+}
+
+type ListActiveProductsAfterRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListActiveProductsAfter(ctx context.Context, arg ListActiveProductsAfterParams) ([]ListActiveProductsAfterRow, error) {
+	rows, err := q.db.Query(ctx, listActiveProductsAfter, arg.AfterCreatedAt, arg.AfterID, arg.PageLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveProductsAfterRow{}
+	for rows.Next() {
+		var i ListActiveProductsAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.CategoryID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.Status,
+			&i.IsFeatured,
+			&i.Specification,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listProductsByOrganization = `-- name: ListProductsByOrganization :many
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    STATUS,
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    organization_id = $1
+ORDER BY
+    created_at DESC
+`
+
+type ListProductsByOrganizationRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListProductsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListProductsByOrganizationRow, error) {
+	rows, err := q.db.Query(ctx, listProductsByOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProductsByOrganizationRow{}
+	for rows.Next() {
+		var i ListProductsByOrganizationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.CategoryID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.Status,
+			&i.IsFeatured,
+			&i.Specification,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateProductStatus = `-- name: UpdateProductStatus :one
+UPDATE products
+SET
+    STATUS = $3,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    id,
+    STATUS,
+    updated_at
+`
+
+type UpdateProductStatusParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Status         string    `json:"status"`
+}
+
+type UpdateProductStatusRow struct {
+	ID        uuid.UUID `json:"id"`
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (q *Queries) UpdateProductStatus(ctx context.Context, arg UpdateProductStatusParams) (UpdateProductStatusRow, error) {
+	row := q.db.QueryRow(ctx, updateProductStatus, arg.ID, arg.OrganizationID, arg.Status)
+	var i UpdateProductStatusRow
+	err := row.Scan(&i.ID, &i.Status, &i.UpdatedAt)
 	return i, err
 }
