@@ -7,12 +7,29 @@ import (
 	"github.com/alexedwards/argon2id"
 )
 
+// Argon2id parameters following OWASP minimum recommendation for production.
+// DefaultParams (t=1) is documented by the library as development/testing only.
+const (
+	argon2Memory      = 128 * 1024 // 128 MB
+	argon2Iterations  = 3
+	argon2Parallelism = 4
+	argon2SaltLength  = 16
+	argon2KeyLength   = 32
+)
+
 var ErrMismatchedHashAndPassword = errors.New(
 	"hashedPassword is not the hash of the given password",
 )
 
 func HashPassword(password string) (string, error) {
-	hashedPassword, err := argon2id.CreateHash(password, argon2id.DefaultParams)
+	params := &argon2id.Params{
+		Memory:      argon2Memory,
+		Iterations:  argon2Iterations,
+		Parallelism: argon2Parallelism,
+		SaltLength:  argon2SaltLength,
+		KeyLength:   argon2KeyLength,
+	}
+	hashedPassword, err := argon2id.CreateHash(password, params)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
 	}
