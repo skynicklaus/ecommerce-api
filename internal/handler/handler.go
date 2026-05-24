@@ -31,6 +31,19 @@ type Handler interface {
 	UserCredentialRegistration(http.ResponseWriter, *http.Request) error
 	PlatformUserCredentialRegistration(http.ResponseWriter, *http.Request) error
 	CustomerCredentialRegistration(http.ResponseWriter, *http.Request) error
+
+	// Auth
+	LoginCustomer(http.ResponseWriter, *http.Request) error
+	LoginMerchant(http.ResponseWriter, *http.Request) error
+	LoginAdmin(http.ResponseWriter, *http.Request) error
+	Logout(http.ResponseWriter, *http.Request) error
+	GetMe(http.ResponseWriter, *http.Request) error
+
+	// Sessions
+	ListActiveSessions(http.ResponseWriter, *http.Request) error
+	RevokeOtherSessions(http.ResponseWriter, *http.Request) error
+	RevokeSessionByID(http.ResponseWriter, *http.Request) error
+
 	validate(req any) error
 }
 
