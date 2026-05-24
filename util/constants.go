@@ -20,6 +20,28 @@ const (
 // SessionTTL is the lifetime of a newly created or renewed session.
 const SessionTTL = 7 * 24 * time.Hour
 
+// Absolute session lifetime ceilings, enforced at renewal time.
+// A session whose created_at + ceiling has passed will not be renewed.
+const (
+	SessionAbsoluteMaxAdmin    = 30 * 24 * time.Hour
+	SessionAbsoluteMaxMerchant = 30 * 24 * time.Hour
+	SessionAbsoluteMaxBuyer    = 90 * 24 * time.Hour
+)
+
+// AbsoluteSessionMax returns the hard lifetime ceiling for the given service.
+func AbsoluteSessionMax(service SessionService) time.Duration {
+	switch service {
+	case SessionServiceAdminPanel:
+		return SessionAbsoluteMaxAdmin
+	case SessionServiceMerchantPanel:
+		return SessionAbsoluteMaxMerchant
+	case SessionServiceBuyerPlatform:
+		return SessionAbsoluteMaxBuyer
+	default:
+		return SessionAbsoluteMaxBuyer
+	}
+}
+
 type OrganizationType string
 
 const (
