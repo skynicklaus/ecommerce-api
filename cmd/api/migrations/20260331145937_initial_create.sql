@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
 CREATE TABLE IF NOT EXISTS sessions (
     id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
     identity_id UUID NOT NULL,
+    active_organization_id UUID,
     token TEXT NOT NULL,
     service TEXT NOT NULL,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -274,9 +275,19 @@ CREATE TRIGGER trg_protect_platform_org BEFORE
 UPDATE
     OR DELETE ON organizations FOR EACH ROW EXECUTE FUNCTION protect_platform_org();
 
+ALTER TABLE
+    sessions
+ADD
+    CONSTRAINT fk_sessions_active_organization_id FOREIGN KEY (active_organization_id) REFERENCES organizations(id) ON DELETE
+SET
+    NULL;
+
 -- +goose StatementEnd
 -- +goose Down
 -- +goose StatementBegin
+ALTER TABLE sessions
+    DROP CONSTRAINT fk_sessions_active_organization_id;
+
 DROP TRIGGER IF EXISTS trg_protect_platform_org ON organizations;
 
 DROP FUNCTION IF EXISTS protect_platform_org() CASCADE;
