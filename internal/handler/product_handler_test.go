@@ -29,7 +29,7 @@ import (
 )
 
 func TestCreateProduct_Integration(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// 1. Read configuration from environment
 	dbSource := os.Getenv("DB_SOURCE")
@@ -64,10 +64,10 @@ func TestCreateProduct_Integration(t *testing.T) {
 
 	// 4. Seed an Organization
 	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-		Name: "Test E2E Org",
-		Type: "merchant",
-		Slug: "merchant.e2e-org-" + uuid.New().String()[:8],
-		Status: "active",
+		Name:     "Test E2E Org",
+		Type:     "merchant",
+		Slug:     "merchant.e2e-org-" + uuid.New().String()[:8],
+		Status:   "active",
 		ParentID: nil,
 		Metadata: nil,
 	})
@@ -196,12 +196,18 @@ func TestCreateProduct_Integration(t *testing.T) {
 			"/v1/products/"+createdProductID.String()+"/status",
 			bytes.NewReader(publishBody),
 		)
-		publishReqCtx := context.WithValue(publishReq.Context(), middleware.OrganizationContextKey{}, org)
+		publishReqCtx := context.WithValue(
+			publishReq.Context(),
+			middleware.OrganizationContextKey{},
+			org,
+		)
 		publishReq = publishReq.WithContext(publishReqCtx)
 
 		rctxPub := chi.NewRouteContext()
 		rctxPub.URLParams.Add("id", createdProductID.String())
-		publishReq = publishReq.WithContext(context.WithValue(publishReq.Context(), chi.RouteCtxKey, rctxPub))
+		publishReq = publishReq.WithContext(
+			context.WithValue(publishReq.Context(), chi.RouteCtxKey, rctxPub),
+		)
 
 		publishRec := httptest.NewRecorder()
 		err = h.UpdateProductStatus(publishRec, publishReq)
@@ -450,7 +456,12 @@ func TestCreateProduct_Integration(t *testing.T) {
 	})
 
 	t.Run("catalog_retrieval_and_details", func(t *testing.T) {
-		require.NotEqual(t, uuid.Nil, createdProductID, "Should have a valid product ID from previous flow")
+		require.NotEqual(
+			t,
+			uuid.Nil,
+			createdProductID,
+			"Should have a valid product ID from previous flow",
+		)
 
 		// 1. Get Product Details by ID
 		reqID := httptest.NewRequest(http.MethodGet, "/v1/products/"+createdProductID.String(), nil)
@@ -489,7 +500,9 @@ func TestCreateProduct_Integration(t *testing.T) {
 
 		rctxSlug := chi.NewRouteContext()
 		rctxSlug.URLParams.Add("slug_or_id", createdProductSlug)
-		reqSlug = reqSlug.WithContext(context.WithValue(reqSlug.Context(), chi.RouteCtxKey, rctxSlug))
+		reqSlug = reqSlug.WithContext(
+			context.WithValue(reqSlug.Context(), chi.RouteCtxKey, rctxSlug),
+		)
 
 		recSlug := httptest.NewRecorder()
 		err = h.GetProductDetails(recSlug, reqSlug)
@@ -503,12 +516,18 @@ func TestCreateProduct_Integration(t *testing.T) {
 
 		// 3. Get Details for Invalid Slug - Should fail with 404 Not Found
 		reqInvalid := httptest.NewRequest(http.MethodGet, "/v1/products/invalid-slug-xyz", nil)
-		reqInvalidCtx := context.WithValue(reqInvalid.Context(), middleware.OrganizationContextKey{}, org)
+		reqInvalidCtx := context.WithValue(
+			reqInvalid.Context(),
+			middleware.OrganizationContextKey{},
+			org,
+		)
 		reqInvalid = reqInvalid.WithContext(reqInvalidCtx)
 
 		rctxInv := chi.NewRouteContext()
 		rctxInv.URLParams.Add("slug_or_id", "invalid-slug-xyz")
-		reqInvalid = reqInvalid.WithContext(context.WithValue(reqInvalid.Context(), chi.RouteCtxKey, rctxInv))
+		reqInvalid = reqInvalid.WithContext(
+			context.WithValue(reqInvalid.Context(), chi.RouteCtxKey, rctxInv),
+		)
 
 		recInvalid := httptest.NewRecorder()
 		err = h.GetProductDetails(recInvalid, reqInvalid)
