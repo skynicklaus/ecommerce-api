@@ -7,23 +7,39 @@ import (
 	"net/http"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/middleware"
 )
 
 func WriteJSON(w http.ResponseWriter, statusCode int, v any) error {
-	w.WriteHeader(statusCode)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
 	return json.NewEncoder(w).Encode(v)
 }
 
 func WriteText(w http.ResponseWriter, statusCode int, v string) error {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(statusCode)
 	_, err := w.Write([]byte(v))
 	return err
 }
 
-func decodeJSON[T any](r *http.Request, req *T) error {
-	return json.NewDecoder(r.Body).Decode(req)
+const maxRequestBodyBytes = 1 * 1024 * 1024 // 1 MB
+
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request, req *T) error {
+	// Restrict request body size to prevent memory exhaustion.
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			return apierror.NewAPIError(
+				http.StatusRequestEntityTooLarge,
+				errors.New("request body too large"),
+			)
+		}
+
+		return apierror.ErrInvalidJSON()
+	}
+	return nil
 }
 
 func organizationFromCtx(ctx context.Context) (db.Organization, error) {
