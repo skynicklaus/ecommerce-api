@@ -1,13 +1,19 @@
 package middleware
 
-import db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+import (
+	"golang.org/x/sync/singleflight"
+
+	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
+)
 
 type Middleware struct {
-	store db.Store
+	store    db.Store
+	renewalG singleflight.Group
 }
 
 func New(store db.Store) *Middleware {
 	return &Middleware{
-		store: store,
+		store:    store,
+		renewalG: singleflight.Group{},
 	}
 }
