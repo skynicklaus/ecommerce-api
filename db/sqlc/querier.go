@@ -34,7 +34,7 @@ type Querier interface {
 	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
 	DeleteAllOtherSessionsByIdentity(ctx context.Context, arg DeleteAllOtherSessionsByIdentityParams) error
 	DeleteAllSessionsByIdentity(ctx context.Context, identityID uuid.UUID) error
-	DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) error
+	DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) (uuid.UUID, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
 	GetActiveProductByID(ctx context.Context, id uuid.UUID) (GetActiveProductByIDRow, error)
 	GetActiveProductBySlug(ctx context.Context, slug string) (GetActiveProductBySlugRow, error)
@@ -69,7 +69,7 @@ type Querier interface {
 	ListProductVariantsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductVariant, error)
 	ListProductVariantsByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ProductVariant, error)
 	ListProductsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListProductsByOrganizationRow, error)
-	ListSessionsByIdentity(ctx context.Context, identityID uuid.UUID) ([]ListSessionsByIdentityRow, error)
+	ListSessionsByIdentity(ctx context.Context, arg ListSessionsByIdentityParams) ([]ListSessionsByIdentityRow, error)
 	ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error)
 	ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error)
 	RenewSession(ctx context.Context, arg RenewSessionParams) error

@@ -19,19 +19,21 @@ INSERT INTO sessions (
     service,
     expires_at,
     ip_address,
-    user_agent
+    user_agent,
+    active_organization_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
-) RETURNING id, identity_id, token, service, expires_at, ip_address, user_agent, created_at, updated_at
+    $1, $2, $3, $4, $5, $6, $7
+) RETURNING id, identity_id, active_organization_id, token, service, expires_at, ip_address, user_agent, created_at, updated_at
 `
 
 type CreateSessionParams struct {
-	IdentityID uuid.UUID `json:"identity_id"`
-	Token      string    `json:"token"`
-	Service    string    `json:"service"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	IpAddress  *string   `json:"ip_address"`
-	UserAgent  *string   `json:"user_agent"`
+	IdentityID           uuid.UUID  `json:"identity_id"`
+	Token                string     `json:"token"`
+	Service              string     `json:"service"`
+	ExpiresAt            time.Time  `json:"expires_at"`
+	IpAddress            *string    `json:"ip_address"`
+	UserAgent            *string    `json:"user_agent"`
+	ActiveOrganizationID *uuid.UUID `json:"active_organization_id"`
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
@@ -42,11 +44,13 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		arg.ExpiresAt,
 		arg.IpAddress,
 		arg.UserAgent,
+		arg.ActiveOrganizationID,
 	)
 	var i Session
 	err := row.Scan(
 		&i.ID,
 		&i.IdentityID,
+		&i.ActiveOrganizationID,
 		&i.Token,
 		&i.Service,
 		&i.ExpiresAt,
@@ -60,16 +64,17 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 
 const deleteAllOtherSessionsByIdentity = `-- name: DeleteAllOtherSessionsByIdentity :exec
 DELETE FROM sessions
-WHERE identity_id = $1 AND token <> $2
+WHERE identity_id = $1 AND service = $2 AND token <> $3
 `
 
 type DeleteAllOtherSessionsByIdentityParams struct {
 	IdentityID uuid.UUID `json:"identity_id"`
+	Service    string    `json:"service"`
 	Token      string    `json:"token"`
 }
 
 func (q *Queries) DeleteAllOtherSessionsByIdentity(ctx context.Context, arg DeleteAllOtherSessionsByIdentityParams) error {
-	_, err := q.db.Exec(ctx, deleteAllOtherSessionsByIdentity, arg.IdentityID, arg.Token)
+	_, err := q.db.Exec(ctx, deleteAllOtherSessionsByIdentity, arg.IdentityID, arg.Service, arg.Token)
 	return err
 }
 
@@ -83,9 +88,10 @@ func (q *Queries) DeleteAllSessionsByIdentity(ctx context.Context, identityID uu
 	return err
 }
 
-const deleteSessionByIDAndIdentity = `-- name: DeleteSessionByIDAndIdentity :exec
+const deleteSessionByIDAndIdentity = `-- name: DeleteSessionByIDAndIdentity :one
 DELETE FROM sessions
 WHERE id = $1 AND identity_id = $2
+RETURNING id
 `
 
 type DeleteSessionByIDAndIdentityParams struct {
@@ -93,9 +99,11 @@ type DeleteSessionByIDAndIdentityParams struct {
 	IdentityID uuid.UUID `json:"identity_id"`
 }
 
-func (q *Queries) DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) error {
-	_, err := q.db.Exec(ctx, deleteSessionByIDAndIdentity, arg.ID, arg.IdentityID)
-	return err
+func (q *Queries) DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, deleteSessionByIDAndIdentity, arg.ID, arg.IdentityID)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteSessionByToken = `-- name: DeleteSessionByToken :exec
@@ -109,7 +117,7 @@ func (q *Queries) DeleteSessionByToken(ctx context.Context, token string) error 
 }
 
 const getSessionWithIdentity = `-- name: GetSessionWithIdentity :one
-SELECT 
+SELECT
     s.id AS session_id,
     s.identity_id,
     s.token,
@@ -119,6 +127,7 @@ SELECT
     s.user_agent,
     s.created_at,
     s.updated_at,
+    s.active_organization_id,
     i.type AS identity_type
 FROM sessions s
 JOIN identities i ON s.identity_id = i.id
@@ -126,16 +135,17 @@ WHERE s.token = $1 AND s.expires_at > NOW() LIMIT 1
 `
 
 type GetSessionWithIdentityRow struct {
-	SessionID    uuid.UUID `json:"session_id"`
-	IdentityID   uuid.UUID `json:"identity_id"`
-	Token        string    `json:"token"`
-	Service      string    `json:"service"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	IpAddress    *string   `json:"ip_address"`
-	UserAgent    *string   `json:"user_agent"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	IdentityType string    `json:"identity_type"`
+	SessionID            uuid.UUID  `json:"session_id"`
+	IdentityID           uuid.UUID  `json:"identity_id"`
+	Token                string     `json:"token"`
+	Service              string     `json:"service"`
+	ExpiresAt            time.Time  `json:"expires_at"`
+	IpAddress            *string    `json:"ip_address"`
+	UserAgent            *string    `json:"user_agent"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+	ActiveOrganizationID *uuid.UUID `json:"active_organization_id"`
+	IdentityType         string     `json:"identity_type"`
 }
 
 func (q *Queries) GetSessionWithIdentity(ctx context.Context, token string) (GetSessionWithIdentityRow, error) {
@@ -151,6 +161,7 @@ func (q *Queries) GetSessionWithIdentity(ctx context.Context, token string) (Get
 		&i.UserAgent,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ActiveOrganizationID,
 		&i.IdentityType,
 	)
 	return i, err
@@ -159,9 +170,14 @@ func (q *Queries) GetSessionWithIdentity(ctx context.Context, token string) (Get
 const listSessionsByIdentity = `-- name: ListSessionsByIdentity :many
 SELECT id, service, ip_address, user_agent, created_at, updated_at, expires_at
 FROM sessions
-WHERE identity_id = $1 AND expires_at > NOW()
+WHERE identity_id = $1 AND service = $2 AND expires_at > NOW()
 ORDER BY updated_at DESC
 `
+
+type ListSessionsByIdentityParams struct {
+	IdentityID uuid.UUID `json:"identity_id"`
+	Service    string    `json:"service"`
+}
 
 type ListSessionsByIdentityRow struct {
 	ID        uuid.UUID `json:"id"`
@@ -173,8 +189,8 @@ type ListSessionsByIdentityRow struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func (q *Queries) ListSessionsByIdentity(ctx context.Context, identityID uuid.UUID) ([]ListSessionsByIdentityRow, error) {
-	rows, err := q.db.Query(ctx, listSessionsByIdentity, identityID)
+func (q *Queries) ListSessionsByIdentity(ctx context.Context, arg ListSessionsByIdentityParams) ([]ListSessionsByIdentityRow, error) {
+	rows, err := q.db.Query(ctx, listSessionsByIdentity, arg.IdentityID, arg.Service)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +224,7 @@ SET
     updated_at = NOW()
 WHERE
     token = $2
+    AND expires_at > NOW()
 `
 
 type RenewSessionParams struct {

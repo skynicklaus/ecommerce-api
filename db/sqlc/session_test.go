@@ -128,7 +128,10 @@ func TestListSessionsByIdentity(t *testing.T) {
 		active2 := makeSession(time.Now().Add(2 * time.Hour))
 		_ = makeSession(time.Now().Add(-time.Minute)) // expired — must not appear
 
-		sessions, err := testStore.ListSessionsByIdentity(t.Context(), identity.ID)
+		sessions, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+			IdentityID: identity.ID,
+			Service:    string(util.SessionServiceBuyerPlatform),
+		})
 		require.NoError(t, err)
 		require.Len(t, sessions, 2)
 		ids := []interface{}{sessions[0].ID, sessions[1].ID}
@@ -140,7 +143,10 @@ func TestListSessionsByIdentity(t *testing.T) {
 		_, session := createSession(t)
 		otherIdentity := createRandomIdentity(t)
 
-		sessions, err := testStore.ListSessionsByIdentity(t.Context(), otherIdentity.ID)
+		sessions, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+			IdentityID: otherIdentity.ID,
+			Service:    string(util.SessionServiceBuyerPlatform),
+		})
 		require.NoError(t, err)
 		for _, s := range sessions {
 			require.NotEqual(t, session.ID, s.ID)
@@ -149,7 +155,10 @@ func TestListSessionsByIdentity(t *testing.T) {
 
 	t.Run("response excludes token", func(t *testing.T) {
 		identity, _ := createSession(t)
-		sessions, err := testStore.ListSessionsByIdentity(t.Context(), identity.ID)
+		sessions, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+			IdentityID: identity.ID,
+			Service:    string(util.SessionServiceBuyerPlatform),
+		})
 		require.NoError(t, err)
 		require.NotEmpty(t, sessions)
 		// ListSessionsByIdentityRow has no Token field — asserted at compile time by this assignment.
@@ -179,13 +188,16 @@ func TestDeleteSessionByIDAndIdentity(t *testing.T) {
 		s1 := makeSession()
 		s2 := makeSession()
 
-		err := testStore.DeleteSessionByIDAndIdentity(t.Context(), db.DeleteSessionByIDAndIdentityParams{
+		_, err := testStore.DeleteSessionByIDAndIdentity(t.Context(), db.DeleteSessionByIDAndIdentityParams{
 			ID:         s1.ID,
 			IdentityID: identity.ID,
 		})
 		require.NoError(t, err)
 
-		remaining, err := testStore.ListSessionsByIdentity(t.Context(), identity.ID)
+		remaining, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+			IdentityID: identity.ID,
+			Service:    string(util.SessionServiceBuyerPlatform),
+		})
 		require.NoError(t, err)
 		require.Len(t, remaining, 1)
 		require.Equal(t, s2.ID, remaining[0].ID)
@@ -195,11 +207,11 @@ func TestDeleteSessionByIDAndIdentity(t *testing.T) {
 		_, s1 := createSession(t)
 		_, s2 := createSession(t)
 
-		err := testStore.DeleteSessionByIDAndIdentity(t.Context(), db.DeleteSessionByIDAndIdentityParams{
+		_, err := testStore.DeleteSessionByIDAndIdentity(t.Context(), db.DeleteSessionByIDAndIdentityParams{
 			ID:         s1.ID,
 			IdentityID: s2.IdentityID,
 		})
-		require.NoError(t, err)
+		require.ErrorIs(t, err, db.ErrNotFound, "deleting with wrong identity should return not found")
 
 		_, err = testStore.GetSessionWithIdentity(t.Context(), s1.Token)
 		require.NoError(t, err, "session should still exist when deleted with wrong identity")
@@ -230,11 +242,15 @@ func TestDeleteAllOtherSessionsByIdentity(t *testing.T) {
 
 	err := testStore.DeleteAllOtherSessionsByIdentity(t.Context(), db.DeleteAllOtherSessionsByIdentityParams{
 		IdentityID: identity.ID,
+		Service:    string(util.SessionServiceBuyerPlatform),
 		Token:      kept.Token,
 	})
 	require.NoError(t, err)
 
-	remaining, err := testStore.ListSessionsByIdentity(t.Context(), identity.ID)
+	remaining, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+		IdentityID: identity.ID,
+		Service:    string(util.SessionServiceBuyerPlatform),
+	})
 	require.NoError(t, err)
 	require.Len(t, remaining, 1)
 	require.Equal(t, kept.ID, remaining[0].ID)
@@ -271,7 +287,10 @@ func TestDeleteAllSessionsByIdentity(t *testing.T) {
 		err := testStore.DeleteAllSessionsByIdentity(t.Context(), identity.ID)
 		require.NoError(t, err)
 
-		remaining, err := testStore.ListSessionsByIdentity(t.Context(), identity.ID)
+		remaining, err := testStore.ListSessionsByIdentity(t.Context(), db.ListSessionsByIdentityParams{
+			IdentityID: identity.ID,
+			Service:    string(util.SessionServiceBuyerPlatform),
+		})
 		require.NoError(t, err)
 		require.Empty(t, remaining)
 	})

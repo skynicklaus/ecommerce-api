@@ -184,15 +184,16 @@ type Role struct {
 }
 
 type Session struct {
-	ID         uuid.UUID `json:"id"`
-	IdentityID uuid.UUID `json:"identity_id"`
-	Token      string    `json:"token"`
-	Service    string    `json:"service"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	IpAddress  *string   `json:"ip_address"`
-	UserAgent  *string   `json:"user_agent"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID                   uuid.UUID  `json:"id"`
+	IdentityID           uuid.UUID  `json:"identity_id"`
+	ActiveOrganizationID *uuid.UUID `json:"active_organization_id"`
+	Token                string     `json:"token"`
+	Service              string     `json:"service"`
+	ExpiresAt            time.Time  `json:"expires_at"`
+	IpAddress            *string    `json:"ip_address"`
+	UserAgent            *string    `json:"user_agent"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type User struct {
