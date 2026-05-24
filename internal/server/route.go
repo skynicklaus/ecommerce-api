@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -24,14 +25,15 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.StripSlashes)
 	r.Use(traceid.Middleware)
+	debugBodyLogging := isDebugBodyLoggingAllowed()
 	//nolint:exhaustruct // too many fields
 	r.Use(httplog.RequestLogger(s.logger.Logger, &httplog.Options{
 		Schema:             s.logger.LogFormat,
 		RecoverPanics:      true,
 		LogRequestHeaders:  []string{"Origin"},
 		LogResponseHeaders: []string{},
-		LogRequestBody:     isDebugBodyLoggingAllowed,
-		LogResponseBody:    isDebugBodyLoggingAllowed,
+		LogRequestBody:     debugBodyLogging,
+		LogResponseBody:    debugBodyLogging,
 		LogExtraAttrs: func(req *http.Request, reqBody string, respStatus int) []slog.Attr {
 			if respStatus == 400 || respStatus == 422 {
 				req.Header.Del("Authorization")
@@ -52,7 +54,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 	}))
 
 	r.Route("/v1", func(r chi.Router) {
-		r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
 
 		// Open login routes.
@@ -101,9 +102,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 			r.Delete("/auth/admin/sessions", s.make(v1Handler.RevokeOtherSessions))
 			r.Delete("/auth/admin/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
 
-			// Platform admin creation is authenticated — first admin is bootstrapped
-			// via the migrate command using PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD.
+			// User creation is admin-gated — first admin is bootstrapped via migrate.
 			r.Post("/users/platform", s.make(v1Handler.PlatformUserCredentialRegistration))
+			r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		})
 	})
 
@@ -141,13 +142,21 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 	}
 }
 
-func isDebugHeaderSet(r *http.Request) bool {
-	return r.Header.Get("Debug") == "reveal-body-logs"
+// isDebugBodyLoggingAllowed returns a per-request predicate when DEBUG_BODY_LOGGING=true,
+// or nil (disables body logging entirely) otherwise. Called once at startup so os.Getenv
+// is not hit on every request.
+func isDebugBodyLoggingAllowed() func(*http.Request) bool {
+	if os.Getenv("DEBUG_BODY_LOGGING") != "true" {
+		return nil
+	}
+	return func(r *http.Request) bool {
+		return r.Header.Get("Debug") == "reveal-body-logs" && !isSensitiveRoute(r.URL.Path)
+	}
 }
 
-// isDebugBodyLoggingAllowed enables request body logging for non-auth routes only.
-// Auth routes are excluded to prevent passwords from appearing in logs regardless
-// of the Debug header value.
-func isDebugBodyLoggingAllowed(r *http.Request) bool {
-	return isDebugHeaderSet(r) && !strings.HasPrefix(r.URL.Path, "/v1/auth/")
+// isSensitiveRoute returns true for any path whose request body may contain credentials.
+func isSensitiveRoute(path string) bool {
+	return strings.HasPrefix(path, "/v1/auth/") ||
+		strings.HasPrefix(path, "/v1/users/") ||
+		path == "/v1/customer"
 }
