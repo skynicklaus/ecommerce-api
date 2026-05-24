@@ -38,6 +38,9 @@ func bootstrapPlatformAdmin(ctx context.Context, store db.Store, log *slog.Logge
 			"no platform admin exists and PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD are not set",
 		)
 	}
+	if len(adminPassword) < 8 {
+		return errors.New("PLATFORM_ADMIN_PASSWORD must be at least 8 characters")
+	}
 
 	hashedPw, err := password.HashPassword(adminPassword)
 	if err != nil {
@@ -89,6 +92,13 @@ func bootstrapPlatformAdmin(ctx context.Context, store db.Store, log *slog.Logge
 		return fmt.Errorf("failed to create platform admin: %w", err)
 	}
 
-	log.InfoContext(ctx, "platform admin bootstrapped successfully", "email", adminEmail, "name", adminName)
+	log.InfoContext(
+		ctx,
+		"platform admin bootstrapped successfully",
+		"email",
+		adminEmail,
+		"name",
+		adminName,
+	)
 	return nil
 }
