@@ -17,7 +17,7 @@ import (
 type CreateOrganizationRequest struct {
 	IdentityID uuid.UUID       `json:"identityId" validate:"required"`
 	ParentID   *uuid.UUID      `json:"parentId"   validate:"omitempty"`
-	Name       string          `json:"name"       validate:"required"`
+	Name       string          `json:"name"       validate:"required,max=255"`
 	Slug       string          `json:"slug"       validate:"required"`
 	Type       string          `json:"type"       validate:"required,oneof=merchant company"`
 	Status     string          `json:"status"     validate:"required,oneof=pending active suspended"`
@@ -29,8 +29,8 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 	ctx := r.Context()
 
 	req := new(CreateOrganizationRequest)
-	if err := decodeJSON(r, req); err != nil {
-		return apierror.ErrInvalidJSON()
+	if err := decodeJSON(w, r, req); err != nil {
+		return err
 	}
 
 	if err := h.validate(req); err != nil {
@@ -39,6 +39,10 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 
 	role, err := getRoleFromSlug(ctx, h.cache, req.Type, req.RoleSlug)
 	if err != nil {
+		if errors.Is(err, cache.ErrRoleNotFound) {
+			return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid role"))
+		}
+
 		return err
 	}
 
