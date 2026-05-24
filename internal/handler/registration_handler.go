@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
-
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/cache"
@@ -20,9 +18,9 @@ const (
 )
 
 type UserCredentialRegistrationRequest struct {
-	Name     string `json:"name"     validate:"required"`
-	Email    string `json:"email"    validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Name     string `json:"name"     validate:"required,max=255"`
+	Email    string `json:"email"    validate:"required,email,max=254"`
+	Password string `json:"password" validate:"required,min=8,max=72"`
 	RoleSlug string `json:"roleSlug" validate:"required"`
 }
 
@@ -35,8 +33,8 @@ func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 
 	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(r, req); err != nil {
-		return apierror.ErrInvalidJSON()
+	if err := decodeJSON(w, r, req); err != nil {
+		return err
 	}
 
 	if err := h.validate(req); err != nil {
@@ -86,8 +84,8 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 	ctx := r.Context()
 
 	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(r, req); err != nil {
-		return apierror.ErrInvalidJSON()
+	if err := decodeJSON(w, r, req); err != nil {
+		return err
 	}
 
 	if err := h.validate(req); err != nil {
@@ -96,7 +94,7 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 
 	role, err := h.cache.GetSystemPlatformRoleFromSlug(ctx, req.RoleSlug)
 	if err != nil {
-		if errors.Is(err, db.ErrNotFound) {
+		if errors.Is(err, cache.ErrRoleNotFound) {
 			return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid role"))
 		}
 
@@ -162,55 +160,26 @@ func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 
 	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(r, req); err != nil {
-		return apierror.ErrInvalidJSON()
+	if err := decodeJSON(w, r, req); err != nil {
+		return err
 	}
 
 	if err := h.validate(req); err != nil {
 		return apierror.ErrValidation(err)
 	}
 
-	customer, err := h.store.GetCustomerByEmail(ctx, req.Email)
-	if err != nil && !errors.Is(err, db.ErrNotFound) {
+	hashedPassword, err := password.HashPassword(req.Password)
+	if err != nil {
 		return err
 	}
 
-	hashedPassword, hashErr := password.HashPassword(req.Password)
-	if hashErr != nil {
-		return hashErr
-	}
-
-	var resultID uuid.UUID
-	if errors.Is(err, db.ErrNotFound) {
-		txResult, registerErr := registerNewCustomer(
-			ctx,
-			h.store,
-			h.cache,
-			req,
-			hashedPassword,
-		)
-		if registerErr != nil {
-			return registerErr
-		}
-
-		resultID = txResult.User.ID
-	} else {
-		accountInfo, accountErr := createCredentialAccount(
-			ctx,
-			h.store,
-			util.IdentityCustomer,
-			customer.ID,
-			hashedPassword,
-		)
-		if accountErr != nil {
-			return accountErr
-		}
-
-		resultID = accountInfo.ID
+	txResult, err := registerNewCustomer(ctx, h.store, h.cache, req, hashedPassword)
+	if err != nil {
+		return err
 	}
 
 	return WriteJSON(w, http.StatusCreated, map[string]string{
-		"id": resultID.String(),
+		"id": txResult.User.ID.String(),
 	})
 }
 
@@ -251,7 +220,7 @@ func registerNewCustomer(
 			Slug:     slugifyEmail(req.Email),
 			Status:   string(util.OrganizationStatusActive),
 			Type:     string(util.OrganizationTypeIndividual),
-			Metadata: []byte{},
+			Metadata: []byte("{}"),
 		},
 	}
 
@@ -269,74 +238,6 @@ func registerNewCustomer(
 	}
 
 	return txResults, nil
-}
-
-func createCredentialAccount(
-	ctx context.Context,
-	store db.Store,
-	identityType util.IdentityType,
-	uuid uuid.UUID,
-	hashedPassword string,
-) (db.AccountInfo, error) {
-	var accountInfo db.AccountInfo
-
-	switch identityType {
-	case util.IdentityUser:
-		userAccount, err := store.CreateUserAccount(ctx, db.CreateUserAccountParams{
-			UserID:                uuid,
-			ProviderID:            string(util.ProviderIDCredential),
-			AccountID:             uuid.String(),
-			HashedPassword:        &hashedPassword,
-			AccessToken:           nil,
-			RefreshToken:          nil,
-			AccessTokenExpiresAt:  nil,
-			RefreshTokenExpiresAt: nil,
-			IDToken:               nil,
-			Scope:                 nil,
-		})
-		if err != nil {
-			errCode := db.ErrorCode(err)
-			if errCode == db.UniqueViolation {
-				return db.AccountInfo{}, apierror.NewAPIError(
-					http.StatusConflict,
-					errors.New("account already registered"),
-				)
-			}
-
-			return db.AccountInfo{}, err
-		}
-
-		accountInfo = db.MapUserAccountToAccountInfo(userAccount)
-	case util.IdentityCustomer:
-		customerAccount, err := store.CreateCustomerAccount(ctx, db.CreateCustomerAccountParams{
-			CustomerID:            uuid,
-			ProviderID:            string(util.ProviderIDCredential),
-			AccountID:             uuid.String(),
-			HashedPassword:        &hashedPassword,
-			AccessToken:           nil,
-			RefreshToken:          nil,
-			AccessTokenExpiresAt:  nil,
-			RefreshTokenExpiresAt: nil,
-			IDToken:               nil,
-			Scope:                 nil,
-		})
-		if err != nil {
-			errCode := db.ErrorCode(err)
-			if errCode == db.UniqueViolation {
-				return db.AccountInfo{}, apierror.NewAPIError(
-					http.StatusConflict,
-					errors.New("account already registered"),
-				)
-			}
-
-			return db.AccountInfo{}, err
-		}
-
-		accountInfo = db.MapCustomerAccountToAccountInfo(customerAccount)
-	default:
-		return db.AccountInfo{}, errors.New("invalid identity type")
-	}
-	return accountInfo, nil
 }
 
 func slugifyEmail(email string) string {
