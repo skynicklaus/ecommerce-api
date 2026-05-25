@@ -51,10 +51,9 @@ SELECT
     ua.hashed_password
 FROM
     users u
-LEFT JOIN user_accounts ua
-    ON u.id = ua.user_id AND ua.provider_id = 'credential'
+    LEFT JOIN user_accounts ua ON u.id = ua.user_id
+    AND ua.provider_id = 'credential'
 WHERE
     u.email = $1
-LIMIT 1;
-
-
+LIMIT
+    1;
