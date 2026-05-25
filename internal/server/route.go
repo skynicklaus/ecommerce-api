@@ -43,7 +43,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 		},
 	}))
 
-	midware := midware.New(s.store)
+	midware := midware.New(s.store, s.redis)
 
 	r.Use(midware.SecurityHeaders)
 
@@ -62,8 +62,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 		r.Post("/auth/admin/login", s.make(v1Handler.LoginAdmin))
 
 		// Storefront (buyer-facing) reads — public, cross-tenant, active products only.
-		r.Get("/products", s.make(v1Handler.ListProducts))
-		r.Get("/products/{slug_or_id}", s.make(v1Handler.GetProductDetails))
+		r.Get("/products", s.make(v1Handler.ListActiveProducts))
+		r.Get("/products/{org_id}/{slug_or_id}", s.make(v1Handler.GetActiveProductDetails))
 
 		// Protected Customer Routes
 		r.Group(func(r chi.Router) {
@@ -76,20 +76,32 @@ func (s *Server) RegisterRoutes() http.Handler {
 			r.Delete("/auth/customer/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
 		})
 
-		// Protected Merchant Routes
+		// Protected Merchant account/session routes.
+		// These require a merchant-panel session but do not require an active organization,
+		// so pending merchants can still inspect their account state and manage sessions.
 		r.Group(func(r chi.Router) {
 			r.Use(midware.RequireService(util.SessionServiceMerchantPanel))
-			r.Use(midware.ValidateOrganization)
 
 			r.Post("/auth/merchant/logout", s.make(v1Handler.Logout))
 			r.Get("/auth/merchant/me", s.make(v1Handler.GetMe))
 			r.Get("/auth/merchant/sessions", s.make(v1Handler.ListActiveSessions))
 			r.Delete("/auth/merchant/sessions", s.make(v1Handler.RevokeOtherSessions))
 			r.Delete("/auth/merchant/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
+		})
+
+		// Protected Merchant operational routes.
+		// These require both a merchant-panel session and an active organization.
+		r.Group(func(r chi.Router) {
+			r.Use(midware.RequireService(util.SessionServiceMerchantPanel))
+			r.Use(midware.ValidateOrganization)
 
 			r.Post("/product-assets", s.make(v1Handler.PreUploadAssets))
 			r.Post("/products", s.make(v1Handler.CreateProduct))
 			r.Patch("/products/{id}/status", s.make(v1Handler.UpdateProductStatus))
+			r.Put("/products/{id}", s.make(v1Handler.UpdateProduct))
+			r.Delete("/products/{id}", s.make(v1Handler.DeleteProduct))
+			r.Get("/merchant/products", s.make(v1Handler.ListMerchantProducts))
+			r.Get("/merchant/products/{id}", s.make(v1Handler.GetMerchantProductDetails))
 		})
 
 		// Protected Platform Admin Routes
