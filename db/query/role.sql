@@ -63,8 +63,10 @@ SELECT
 FROM
     roles
 WHERE
-    organization_id IS NULL
-    OR organization_id = $1
+    (
+        organization_id IS NULL
+        OR organization_id = $1
+    )
     AND organization_type = $2
 ORDER BY
     id;
