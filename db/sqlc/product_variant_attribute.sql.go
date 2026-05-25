@@ -31,6 +31,18 @@ func (q *Queries) AssignAttributeValueToProductVariant(ctx context.Context, arg 
 	return err
 }
 
+const deleteVariantAttributes = `-- name: DeleteVariantAttributes :exec
+DELETE FROM
+    product_variant_attributes
+WHERE
+    product_variant_id = $1
+`
+
+func (q *Queries) DeleteVariantAttributes(ctx context.Context, productVariantID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteVariantAttributes, productVariantID)
+	return err
+}
+
 const listVariantAttributesByProduct = `-- name: ListVariantAttributesByProduct :many
 SELECT
     pva.product_variant_id,

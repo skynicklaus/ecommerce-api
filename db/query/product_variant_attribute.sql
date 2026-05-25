@@ -40,3 +40,9 @@ FROM
     JOIN product_variants pv ON pva.product_variant_id = pv.id
 WHERE
     pv.product_id = ANY (sqlc.arg ('product_ids')::UUID []);
+
+-- name: DeleteVariantAttributes :exec
+DELETE FROM
+    product_variant_attributes
+WHERE
+    product_variant_id = $1;
