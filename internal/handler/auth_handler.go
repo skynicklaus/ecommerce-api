@@ -165,15 +165,9 @@ func (h *V1Handler) handleUserLogin(
 		return apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
 	}
 
-	var orgID *uuid.UUID
-	member, memberErr := h.store.GetMemberByIdentityID(ctx, res.IdentityID)
-	switch {
-	case memberErr == nil:
-		orgID = &member.OrganizationID
-	case errors.Is(memberErr, db.ErrNotFound):
-		// No membership yet — valid for platform admins or users pending org assignment.
-	default:
-		return fmt.Errorf("failed to resolve membership: %w", memberErr)
+	orgID, orgErr := h.authorizedOrganizationForUserLogin(ctx, res.IdentityID, service)
+	if orgErr != nil {
+		return orgErr
 	}
 
 	token, expires, sessionID, dbErr := h.createStatefulSession(
@@ -187,11 +181,6 @@ func (h *V1Handler) handleUserLogin(
 		return dbErr
 	}
 
-	resolvedOrgID := uuid.Nil
-	if orgID != nil {
-		resolvedOrgID = *orgID
-	}
-
 	return WriteJSON(w, http.StatusOK, LoginResponse{
 		Token:     token,
 		ExpiresAt: expires,
@@ -199,13 +188,53 @@ func (h *V1Handler) handleUserLogin(
 			IdentityID:     res.IdentityID,
 			Type:           string(util.IdentityUser),
 			ActorID:        res.ID,
-			OrganizationID: resolvedOrgID,
+			OrganizationID: *orgID,
 			Name:           res.Name,
 			Email:          res.Email,
 			Service:        service,
 			SessionID:      sessionID,
 		},
 	})
+}
+
+func (h *V1Handler) authorizedOrganizationForUserLogin(
+	ctx context.Context,
+	identityID uuid.UUID,
+	service util.SessionService,
+) (*uuid.UUID, error) {
+	member, memberErr := h.store.GetMemberByIdentityID(ctx, identityID)
+	if memberErr != nil {
+		if errors.Is(memberErr, db.ErrNotFound) {
+			return nil, apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+		}
+		return nil, fmt.Errorf("failed to resolve membership: %w", memberErr)
+	}
+
+	org, orgErr := h.store.GetOrganizationByID(ctx, member.OrganizationID)
+	if orgErr != nil {
+		if errors.Is(orgErr, db.ErrNotFound) {
+			return nil, apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+		}
+		return nil, fmt.Errorf("failed to resolve organization: %w", orgErr)
+	}
+
+	if !organizationAllowedForService(org.Type, service) {
+		return nil, apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+	}
+
+	return &member.OrganizationID, nil
+}
+
+func organizationAllowedForService(orgType string, service util.SessionService) bool {
+	switch service {
+	case util.SessionServiceAdminPanel:
+		return orgType == string(util.OrganizationTypePlatform)
+	case util.SessionServiceMerchantPanel:
+		return orgType == string(util.OrganizationTypeMerchant) ||
+			orgType == string(util.OrganizationTypeCompany)
+	default:
+		return false
+	}
 }
 
 const (
