@@ -9,11 +9,13 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/goleak"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 )
 
 var testStore db.Store
+var testPool *pgxpool.Pool
 
 func TestMain(m *testing.M) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -30,9 +32,19 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	testPool = connPool
 	testStore = db.NewStore(connPool)
 
 	code := m.Run()
+
+	// Clean up connection pool before goleak check
 	connPool.Close()
+
+	if code == 0 {
+		if err := goleak.Find(); err != nil {
+			logger.Error("goleak: found unexpected goroutines", slog.Any("err", err))
+			os.Exit(1)
+		}
+	}
 	os.Exit(code)
 }
