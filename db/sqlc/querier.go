@@ -34,10 +34,14 @@ type Querier interface {
 	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
 	DeleteAllOtherSessionsByIdentity(ctx context.Context, arg DeleteAllOtherSessionsByIdentityParams) error
 	DeleteAllSessionsByIdentity(ctx context.Context, identityID uuid.UUID) error
+	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
+	DeleteProductAssetsByProductID(ctx context.Context, productID uuid.UUID) error
+	DeleteProductVariant(ctx context.Context, arg DeleteProductVariantParams) error
 	DeleteSessionByIDAndIdentity(ctx context.Context, arg DeleteSessionByIDAndIdentityParams) (uuid.UUID, error)
 	DeleteSessionByToken(ctx context.Context, token string) error
+	DeleteVariantAttributes(ctx context.Context, productVariantID uuid.UUID) error
 	GetActiveProductByID(ctx context.Context, id uuid.UUID) (GetActiveProductByIDRow, error)
-	GetActiveProductBySlug(ctx context.Context, slug string) (GetActiveProductBySlugRow, error)
+	GetActiveProductBySlug(ctx context.Context, arg GetActiveProductBySlugParams) (GetActiveProductBySlugRow, error)
 	GetAddressByID(ctx context.Context, id uuid.UUID) (GetAddressByIDRow, error)
 	GetCategoryByID(ctx context.Context, id uuid.UUID) (Category, error)
 	GetCustomerAccountByID(ctx context.Context, customerID uuid.UUID) (GetCustomerAccountByIDRow, error)
@@ -51,7 +55,7 @@ type Querier interface {
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetProductByID(ctx context.Context, id uuid.UUID) (GetProductByIDRow, error)
 	GetProductByIdempotencyKey(ctx context.Context, arg GetProductByIdempotencyKeyParams) (Product, error)
-	GetProductBySlug(ctx context.Context, slug string) (GetProductBySlugRow, error)
+	GetProductBySlug(ctx context.Context, arg GetProductBySlugParams) (GetProductBySlugRow, error)
 	GetProductVariantByID(ctx context.Context, id uuid.UUID) (ProductVariant, error)
 	GetRoleByID(ctx context.Context, id int16) (Role, error)
 	GetRoleBySlug(ctx context.Context, slug string) (Role, error)
@@ -69,12 +73,15 @@ type Querier interface {
 	ListProductVariantsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductVariant, error)
 	ListProductVariantsByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ProductVariant, error)
 	ListProductsByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListProductsByOrganizationRow, error)
+	ListProductsByOrganizationWithStatus(ctx context.Context, arg ListProductsByOrganizationWithStatusParams) ([]ListProductsByOrganizationWithStatusRow, error)
 	ListSessionsByIdentity(ctx context.Context, arg ListSessionsByIdentityParams) ([]ListSessionsByIdentityRow, error)
 	ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error)
 	ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error)
 	RenewSession(ctx context.Context, arg RenewSessionParams) error
 	UpdateCustomerAccount(ctx context.Context, arg UpdateCustomerAccountParams) (UpdateCustomerAccountRow, error)
+	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductStatus(ctx context.Context, arg UpdateProductStatusParams) (UpdateProductStatusRow, error)
+	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error)
 	UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) (UpdateUserAccountRow, error)
 }
 

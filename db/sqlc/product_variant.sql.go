@@ -59,6 +59,24 @@ func (q *Queries) CreateProductVariant(ctx context.Context, arg CreateProductVar
 	return i, err
 }
 
+const deleteProductVariant = `-- name: DeleteProductVariant :exec
+DELETE FROM
+    product_variants
+WHERE
+    id = $1
+    AND organization_id = $2
+`
+
+type DeleteProductVariantParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+func (q *Queries) DeleteProductVariant(ctx context.Context, arg DeleteProductVariantParams) error {
+	_, err := q.db.Exec(ctx, deleteProductVariant, arg.ID, arg.OrganizationID)
+	return err
+}
+
 const getProductVariantByID = `-- name: GetProductVariantByID :one
 SELECT
     id,
@@ -200,4 +218,48 @@ func (q *Queries) ListProductVariantsByProductIDs(ctx context.Context, productId
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateProductVariant = `-- name: UpdateProductVariant :one
+UPDATE
+    product_variants
+SET
+    name = $3,
+    price = $4,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    id, product_id, organization_id, sku, name, price, track_inventory, is_active, created_at, updated_at
+`
+
+type UpdateProductVariantParams struct {
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	Name           string          `json:"name"`
+	Price          decimal.Decimal `json:"price"`
+}
+
+func (q *Queries) UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error) {
+	row := q.db.QueryRow(ctx, updateProductVariant,
+		arg.ID,
+		arg.OrganizationID,
+		arg.Name,
+		arg.Price,
+	)
+	var i ProductVariant
+	err := row.Scan(
+		&i.ID,
+		&i.ProductID,
+		&i.OrganizationID,
+		&i.Sku,
+		&i.Name,
+		&i.Price,
+		&i.TrackInventory,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

@@ -71,3 +71,23 @@ WHERE
 ORDER BY
     product_id,
     id;
+
+-- name: UpdateProductVariant :one
+UPDATE
+    product_variants
+SET
+    name = $3,
+    price = $4,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    *;
+
+-- name: DeleteProductVariant :exec
+DELETE FROM
+    product_variants
+WHERE
+    id = $1
+    AND organization_id = $2;
