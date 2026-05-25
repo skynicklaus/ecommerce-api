@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -20,6 +21,9 @@ func createRandomIdentity(t *testing.T) db.Identity {
 	identity, err := testStore.CreateIdentity(t.Context(), identityType)
 	require.NoError(t, err)
 	require.NotEmpty(t, identity)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", identity.ID)
+	})
 
 	require.Equal(t, identityType, identity.Type)
 	require.NotZero(t, identity.CreatedAt)

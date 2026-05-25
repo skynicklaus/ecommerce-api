@@ -4,6 +4,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -26,12 +27,18 @@ func TestManagementHandlers_Integration(t *testing.T) {
 
 	dbSource := os.Getenv("DB_SOURCE")
 	if dbSource == "" {
-		dbSource = "postgresql://app_system:system_secret@localhost:5432/ecommerce?sslmode=disable"
+		t.Skip("DB_SOURCE not set")
 	}
 
 	connPool, err := pgxpool.New(ctx, dbSource)
 	require.NoError(t, err)
-	defer connPool.Close()
+	t.Cleanup(connPool.Close)
+	t.Cleanup(func() {
+		http.DefaultClient.CloseIdleConnections()
+		if tr, ok := http.DefaultTransport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
+	})
 
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
@@ -50,6 +57,10 @@ func TestManagementHandlers_Integration(t *testing.T) {
 
 	t.Run("UserCredentialRegistration", func(t *testing.T) {
 		email := "merchant-reg-" + uuid.New().String()[:8] + "@test.com"
+		t.Cleanup(func() {
+			_, _ = connPool.Exec(context.Background(),
+				"DELETE FROM identities WHERE id = (SELECT identity_id FROM users WHERE email = $1)", email)
+		})
 
 		t.Run("success", func(t *testing.T) {
 			body, _ := json.Marshal(UserCredentialRegistrationRequest{
@@ -95,6 +106,10 @@ func TestManagementHandlers_Integration(t *testing.T) {
 
 	t.Run("CustomerCredentialRegistration", func(t *testing.T) {
 		email := "customer-reg-" + uuid.New().String()[:8] + "@test.com"
+		t.Cleanup(func() {
+			_, _ = connPool.Exec(context.Background(),
+				"DELETE FROM identities WHERE id = (SELECT identity_id FROM customers WHERE email = $1)", email)
+		})
 
 		t.Run("success", func(t *testing.T) {
 			body, _ := json.Marshal(UserCredentialRegistrationRequest{
@@ -133,9 +148,14 @@ func TestManagementHandlers_Integration(t *testing.T) {
 
 	t.Run("PlatformUserCredentialRegistration", func(t *testing.T) {
 		t.Run("success", func(t *testing.T) {
+			platformEmail := "platform-reg-" + uuid.New().String()[:8] + "@test.com"
+			t.Cleanup(func() {
+				_, _ = connPool.Exec(context.Background(),
+					"DELETE FROM identities WHERE id = (SELECT identity_id FROM users WHERE email = $1)", platformEmail)
+			})
 			body, _ := json.Marshal(UserCredentialRegistrationRequest{
 				Name:     "New Platform Admin",
-				Email:    "platform-reg-" + uuid.New().String()[:8] + "@test.com",
+				Email:    platformEmail,
 				Password: "supersecure123",
 				RoleSlug: "platform.owner",
 			})
@@ -168,6 +188,9 @@ func TestManagementHandlers_Integration(t *testing.T) {
 	t.Run("CreateOrganization", func(t *testing.T) {
 		identity, err := store.CreateIdentity(ctx, string(util.IdentityUser))
 		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", identity.ID)
+		})
 
 		t.Run("success", func(t *testing.T) {
 			body, _ := json.Marshal(CreateOrganizationRequest{
@@ -189,6 +212,12 @@ func TestManagementHandlers_Integration(t *testing.T) {
 			var resp map[string]string
 			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 			require.NotEmpty(t, resp["id"])
+
+			orgID, parseErr := uuid.Parse(resp["id"])
+			require.NoError(t, parseErr)
+			t.Cleanup(func() {
+				_, _ = connPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", orgID)
+			})
 		})
 
 		t.Run("invalid_role_returns_400", func(t *testing.T) {

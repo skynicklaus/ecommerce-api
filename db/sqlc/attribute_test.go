@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -29,6 +30,9 @@ func createRandomAttributeWithOrg(t *testing.T, organization *db.Organization) d
 	attribute, err := testStore.CreateAttribute(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, attribute)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM attributes WHERE id = $1", attribute.ID)
+	})
 
 	require.Equal(t, arg.Name, attribute.Name)
 	require.Equal(t, arg.Slug, attribute.Slug)

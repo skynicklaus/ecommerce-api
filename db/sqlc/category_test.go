@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -37,6 +38,9 @@ func createRandomCategory(t *testing.T) db.Category {
 	category, err := testStore.CreateCategory(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, category)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM categories WHERE id = $1", category.ID)
+	})
 
 	require.Empty(t, category.ParentID)
 	require.Equal(t, arg.Name, category.Name)

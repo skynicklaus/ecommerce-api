@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -120,6 +121,9 @@ func TestSQLStore_CreateOrganizationTx(t *testing.T) {
 				require.Equal(t, tt.matchErr, err)
 			} else {
 				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, _ = testPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", got.Organization.ID)
+				})
 			}
 
 			if tt.check != nil {

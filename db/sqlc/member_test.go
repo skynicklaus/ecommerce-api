@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,6 +61,9 @@ func TestCountPlatformAdmins(t *testing.T) {
 	}
 	org, err := testStore.CreateOrganization(t.Context(), orgArg)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", org.ID)
+	})
 
 	identity := createRandomIdentity(t)
 	_, err = testStore.CreateMember(t.Context(), db.CreateMemberParams{

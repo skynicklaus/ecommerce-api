@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -51,6 +52,9 @@ func createRandomOrganization(t *testing.T) db.Organization {
 	organization, err := testStore.CreateOrganization(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, organization)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", organization.ID)
+	})
 
 	require.Equal(t, arg.Name, organization.Name)
 	require.Equal(t, arg.Type, organization.Type)
