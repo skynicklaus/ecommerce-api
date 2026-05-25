@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"time"
 
@@ -19,7 +20,24 @@ type S3Storage struct {
 
 func New(ctx context.Context) (*S3Storage, error) {
 	env := os.Getenv("APP_ENV")
-	cfg, err := config.LoadDefaultConfig(ctx)
+
+	// Create custom HTTP transport with higher idle connection limits.
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		baseTransport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		}
+	}
+	customTransport := baseTransport.Clone()
+	customTransport.MaxIdleConns = 100
+	customTransport.MaxIdleConnsPerHost = 25
+	customTransport.IdleConnTimeout = 90 * time.Second
+
+	httpClient := &http.Client{
+		Transport: customTransport,
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +53,11 @@ func New(ctx context.Context) (*S3Storage, error) {
 		}
 	})
 	tmc := transfermanager.New(s3c)
-	pc := s3.NewPresignClient(s3c)
+	pc := s3.NewPresignClient(s3c, func(o *s3.PresignOptions) {
+		o.ClientOptions = append(o.ClientOptions, func(o *s3.Options) {
+			o.ResponseChecksumValidation = aws.ResponseChecksumValidationWhenRequired
+		})
+	})
 
 	return &S3Storage{
 		S3:      s3c,
