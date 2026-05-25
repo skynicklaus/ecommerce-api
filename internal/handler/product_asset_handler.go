@@ -30,9 +30,14 @@ import (
 )
 
 const (
-	maxFilesPerUpload     = 10
-	multipartMemoryBudget = 10 << 20
+	maxFilesPerUpload           = 10
+	maxConcurrentVideoTranscode = 2
+	multipartMemoryBudget       = 10 << 20
 )
+
+// videoTranscodeSem bounds local ffmpeg process fan-out per API instance.
+// Images are intentionally not limited by this semaphore; they are processed in-process.
+var videoTranscodeSem = make(chan struct{}, maxConcurrentVideoTranscode)
 
 type PendingUpload struct {
 	Token           string    `json:"token"`
@@ -274,6 +279,13 @@ func (h *V1Handler) processVideoUpload(
 	reader io.Reader,
 	header *multipart.FileHeader,
 ) (*PendingUpload, error) {
+	select {
+	case videoTranscodeSem <- struct{}{}:
+		defer func() { <-videoTranscodeSem }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
 	tempFile, err := os.CreateTemp("", "video-*.mp4")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
