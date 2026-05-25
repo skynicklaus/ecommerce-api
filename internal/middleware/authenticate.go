@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -197,42 +198,68 @@ func (m *Middleware) resolveIdentity(
 		resolvedOrgID = *orgID
 	}
 
+	cacheKey := "identity:" + identityID.String()
+	if m.cache != nil {
+		if cachedBytes, err := m.cache.Get(ctx, cacheKey).Bytes(); err == nil {
+			var cached IdentityContext
+			if json.Unmarshal(cachedBytes, &cached) == nil {
+				cached.Service = service
+				return cached, nil
+			}
+		}
+	}
+
+	var identityCtx IdentityContext
+	var err error
+
 	switch identityType {
 	case string(util.IdentityCustomer):
-		customer, custErr := m.store.GetCustomerByIdentityID(ctx, identityID)
-		if custErr != nil {
-			return IdentityContext{}, custErr
+		var customer db.Customer
+		customer, err = m.store.GetCustomerByIdentityID(ctx, identityID)
+		if err == nil {
+			identityCtx = IdentityContext{
+				IdentityID:     identityID,
+				Type:           string(util.IdentityCustomer),
+				ActorID:        customer.ID,
+				OrganizationID: resolvedOrgID,
+				Name:           customer.Name,
+				Email:          customer.Email,
+				Service:        service,
+				SessionID:      uuid.Nil, // set by RequireService after resolveIdentity returns
+			}
 		}
-		return IdentityContext{
-			IdentityID:     identityID,
-			Type:           string(util.IdentityCustomer),
-			ActorID:        customer.ID,
-			OrganizationID: resolvedOrgID,
-			Name:           customer.Name,
-			Email:          customer.Email,
-			Service:        service,
-			SessionID:      uuid.Nil, // set by RequireService after resolveIdentity returns
-		}, nil
 
 	case string(util.IdentityUser):
-		user, userErr := m.store.GetUserByIdentityID(ctx, identityID)
-		if userErr != nil {
-			return IdentityContext{}, userErr
+		var user db.User
+		user, err = m.store.GetUserByIdentityID(ctx, identityID)
+		if err == nil {
+			identityCtx = IdentityContext{
+				IdentityID:     identityID,
+				Type:           string(util.IdentityUser),
+				ActorID:        user.ID,
+				OrganizationID: resolvedOrgID,
+				Name:           user.Name,
+				Email:          user.Email,
+				Service:        service,
+				SessionID:      uuid.Nil, // set by RequireService after resolveIdentity returns
+			}
 		}
-		return IdentityContext{
-			IdentityID:     identityID,
-			Type:           string(util.IdentityUser),
-			ActorID:        user.ID,
-			OrganizationID: resolvedOrgID,
-			Name:           user.Name,
-			Email:          user.Email,
-			Service:        service,
-			SessionID:      uuid.Nil, // set by RequireService after resolveIdentity returns
-		}, nil
 
 	default:
 		return IdentityContext{}, fmt.Errorf("unknown identity type %q in session", identityType)
 	}
+
+	if err != nil {
+		return IdentityContext{}, err
+	}
+
+	if m.cache != nil {
+		if cachedBytes, marshalErr := json.Marshal(identityCtx); marshalErr == nil {
+			_ = m.cache.Set(ctx, cacheKey, cachedBytes, 15*time.Minute).Err()
+		}
+	}
+
+	return identityCtx, nil
 }
 
 func GetIdentityFromContext(ctx context.Context) (IdentityContext, error) {
