@@ -70,6 +70,18 @@ func (q *Queries) CreateProductAsset(ctx context.Context, arg CreateProductAsset
 	return i, err
 }
 
+const deleteProductAssetsByProductID = `-- name: DeleteProductAssetsByProductID :exec
+DELETE FROM
+    product_assets
+WHERE
+    product_id = $1
+`
+
+func (q *Queries) DeleteProductAssetsByProductID(ctx context.Context, productID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProductAssetsByProductID, productID)
+	return err
+}
+
 const listProductAssetsByProductID = `-- name: ListProductAssetsByProductID :many
 SELECT
     id,

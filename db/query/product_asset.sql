@@ -54,3 +54,9 @@ WHERE
 ORDER BY
     product_id,
     sort_order;
+
+-- name: DeleteProductAssetsByProductID :exec
+DELETE FROM
+    product_assets
+WHERE
+    product_id = $1;
