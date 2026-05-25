@@ -67,6 +67,24 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 	return i, err
 }
 
+const deleteProduct = `-- name: DeleteProduct :exec
+DELETE FROM
+    products
+WHERE
+    id = $1
+    AND organization_id = $2
+`
+
+type DeleteProductParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+func (q *Queries) DeleteProduct(ctx context.Context, arg DeleteProductParams) error {
+	_, err := q.db.Exec(ctx, deleteProduct, arg.ID, arg.OrganizationID)
+	return err
+}
+
 const getActiveProductByID = `-- name: GetActiveProductByID :one
 SELECT
     id,
@@ -138,11 +156,17 @@ SELECT
 FROM
     products
 WHERE
-    slug = $1
+    organization_id = $1
+    AND slug = $2
     AND "status" = 'active'
 LIMIT
     1
 `
+
+type GetActiveProductBySlugParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Slug           string    `json:"slug"`
+}
 
 type GetActiveProductBySlugRow struct {
 	ID             uuid.UUID `json:"id"`
@@ -158,8 +182,8 @@ type GetActiveProductBySlugRow struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-func (q *Queries) GetActiveProductBySlug(ctx context.Context, slug string) (GetActiveProductBySlugRow, error) {
-	row := q.db.QueryRow(ctx, getActiveProductBySlug, slug)
+func (q *Queries) GetActiveProductBySlug(ctx context.Context, arg GetActiveProductBySlugParams) (GetActiveProductBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getActiveProductBySlug, arg.OrganizationID, arg.Slug)
 	var i GetActiveProductBySlugRow
 	err := row.Scan(
 		&i.ID,
@@ -284,12 +308,16 @@ SELECT
 FROM
     products
 WHERE
-    slug = $1
-ORDER BY
-    id
+    organization_id = $1
+    AND slug = $2
 LIMIT
     1
 `
+
+type GetProductBySlugParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Slug           string    `json:"slug"`
+}
 
 type GetProductBySlugRow struct {
 	ID             uuid.UUID `json:"id"`
@@ -305,8 +333,8 @@ type GetProductBySlugRow struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-func (q *Queries) GetProductBySlug(ctx context.Context, slug string) (GetProductBySlugRow, error) {
-	row := q.db.QueryRow(ctx, getProductBySlug, slug)
+func (q *Queries) GetProductBySlug(ctx context.Context, arg GetProductBySlugParams) (GetProductBySlugRow, error) {
+	row := q.db.QueryRow(ctx, getProductBySlug, arg.OrganizationID, arg.Slug)
 	var i GetProductBySlugRow
 	err := row.Scan(
 		&i.ID,
@@ -469,6 +497,156 @@ func (q *Queries) ListProductsByOrganization(ctx context.Context, organizationID
 		return nil, err
 	}
 	return items, nil
+}
+
+const listProductsByOrganizationWithStatus = `-- name: ListProductsByOrganizationWithStatus :many
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    "status",
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    organization_id = $1
+    AND "status" = ANY($2::TEXT [])
+    AND (created_at, id) < (
+        $3::TIMESTAMPTZ,
+        $4::UUID
+    )
+ORDER BY
+    created_at DESC,
+    id DESC
+LIMIT
+    $5::INT
+`
+
+type ListProductsByOrganizationWithStatusParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Statuses       []string  `json:"statuses"`
+	AfterCreatedAt time.Time `json:"after_created_at"`
+	AfterID        uuid.UUID `json:"after_id"`
+	PageLimit      int32     `json:"page_limit"`
+}
+
+type ListProductsByOrganizationWithStatusRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+func (q *Queries) ListProductsByOrganizationWithStatus(ctx context.Context, arg ListProductsByOrganizationWithStatusParams) ([]ListProductsByOrganizationWithStatusRow, error) {
+	rows, err := q.db.Query(ctx, listProductsByOrganizationWithStatus,
+		arg.OrganizationID,
+		arg.Statuses,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListProductsByOrganizationWithStatusRow{}
+	for rows.Next() {
+		var i ListProductsByOrganizationWithStatusRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.CategoryID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.Status,
+			&i.IsFeatured,
+			&i.Specification,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateProduct = `-- name: UpdateProduct :one
+UPDATE
+    products
+SET
+    category_id = $3,
+    name = $4,
+    slug = $5,
+    description = $6,
+    specification = $7,
+    "status" = $8,
+    is_featured = $9,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    id, organization_id, category_id, name, slug, description, status, specification, is_featured, idempotency_key, created_at, updated_at
+`
+
+type UpdateProductParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Specification  []byte    `json:"specification"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+}
+
+func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error) {
+	row := q.db.QueryRow(ctx, updateProduct,
+		arg.ID,
+		arg.OrganizationID,
+		arg.CategoryID,
+		arg.Name,
+		arg.Slug,
+		arg.Description,
+		arg.Specification,
+		arg.Status,
+		arg.IsFeatured,
+	)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.CategoryID,
+		&i.Name,
+		&i.Slug,
+		&i.Description,
+		&i.Status,
+		&i.Specification,
+		&i.IsFeatured,
+		&i.IdempotencyKey,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateProductStatus = `-- name: UpdateProductStatus :one

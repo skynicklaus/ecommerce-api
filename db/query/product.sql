@@ -75,9 +75,8 @@ SELECT
 FROM
     products
 WHERE
-    slug = $1
-ORDER BY
-    id
+    organization_id = $1
+    AND slug = $2
 LIMIT
     1;
 
@@ -138,7 +137,8 @@ SELECT
 FROM
     products
 WHERE
-    slug = $1
+    organization_id = $1
+    AND slug = $2
     AND "status" = 'active'
 LIMIT
     1;
@@ -160,6 +160,59 @@ FROM
     products
 WHERE
     "status" = 'active'
+    AND (created_at, id) < (
+        sqlc.arg ('after_created_at')::TIMESTAMPTZ,
+        sqlc.arg ('after_id')::UUID
+    )
+ORDER BY
+    created_at DESC,
+    id DESC
+LIMIT
+    sqlc.arg ('page_limit')::INT;
+
+-- name: UpdateProduct :one
+UPDATE
+    products
+SET
+    category_id = $3,
+    name = $4,
+    slug = $5,
+    description = $6,
+    specification = $7,
+    "status" = $8,
+    is_featured = $9,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    *;
+
+-- name: DeleteProduct :exec
+DELETE FROM
+    products
+WHERE
+    id = $1
+    AND organization_id = $2;
+
+-- name: ListProductsByOrganizationWithStatus :many
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    "status",
+    is_featured,
+    specification,
+    created_at,
+    updated_at
+FROM
+    products
+WHERE
+    organization_id = $1
+    AND "status" = ANY(sqlc.arg('statuses')::TEXT [])
     AND (created_at, id) < (
         sqlc.arg ('after_created_at')::TIMESTAMPTZ,
         sqlc.arg ('after_id')::UUID
