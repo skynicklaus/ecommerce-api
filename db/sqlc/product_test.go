@@ -41,7 +41,7 @@ func createRandomProductWithOrg(t *testing.T, organization db.Organization) db.P
 	require.Equal(t, arg.CategoryID, product.CategoryID)
 	require.Equal(t, arg.Name, product.Name)
 	require.Equal(t, arg.Slug, product.Slug)
-	require.Equal(t, "draft", product.Status)
+	require.Equal(t, string(util.ProductStatusDraft), product.Status)
 	require.JSONEq(t, string(arg.Description), string(product.Description))
 	require.False(t, product.IsFeatured)
 	require.NotZero(t, product.CreatedAt)
@@ -92,21 +92,21 @@ func TestGetProductByID(t *testing.T) {
 
 func TestUpdateProductStatus(t *testing.T) {
 	product := createRandomProduct(t)
-	require.Equal(t, "draft", product.Status)
+	require.Equal(t, string(util.ProductStatusDraft), product.Status)
 
 	row, err := testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
 		ID:             product.ID,
 		OrganizationID: product.OrganizationID,
-		Status:         "active",
+		Status:         string(util.ProductStatusActive),
 	})
 	require.NoError(t, err)
 	require.Equal(t, product.ID, row.ID)
-	require.Equal(t, "active", row.Status)
+	require.Equal(t, string(util.ProductStatusActive), row.Status)
 	require.NotZero(t, row.UpdatedAt)
 
 	fetched, err := testStore.GetProductByID(t.Context(), product.ID)
 	require.NoError(t, err)
-	require.Equal(t, "active", fetched.Status)
+	require.Equal(t, string(util.ProductStatusActive), fetched.Status)
 }
 
 func TestGetActiveProductByIDAndSlug(t *testing.T) {
@@ -116,14 +116,17 @@ func TestGetActiveProductByIDAndSlug(t *testing.T) {
 	_, err := testStore.GetActiveProductByID(t.Context(), product.ID)
 	require.Error(t, err)
 
-	_, err = testStore.GetActiveProductBySlug(t.Context(), product.Slug)
+	_, err = testStore.GetActiveProductBySlug(t.Context(), db.GetActiveProductBySlugParams{
+		OrganizationID: product.OrganizationID,
+		Slug:           product.Slug,
+	})
 	require.Error(t, err)
 
 	// Activate product
 	_, err = testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
 		ID:             product.ID,
 		OrganizationID: product.OrganizationID,
-		Status:         "active",
+		Status:         string(util.ProductStatusActive),
 	})
 	require.NoError(t, err)
 
@@ -131,9 +134,12 @@ func TestGetActiveProductByIDAndSlug(t *testing.T) {
 	rowID, err := testStore.GetActiveProductByID(t.Context(), product.ID)
 	require.NoError(t, err)
 	require.Equal(t, product.ID, rowID.ID)
-	require.Equal(t, "active", rowID.Status)
+	require.Equal(t, string(util.ProductStatusActive), rowID.Status)
 
-	rowSlug, err := testStore.GetActiveProductBySlug(t.Context(), product.Slug)
+	rowSlug, err := testStore.GetActiveProductBySlug(t.Context(), db.GetActiveProductBySlugParams{
+		OrganizationID: product.OrganizationID,
+		Slug:           product.Slug,
+	})
 	require.NoError(t, err)
 	require.Equal(t, product.ID, rowSlug.ID)
 	require.Equal(t, product.Slug, rowSlug.Slug)
@@ -142,7 +148,10 @@ func TestGetActiveProductByIDAndSlug(t *testing.T) {
 func TestGetProductBySlug(t *testing.T) {
 	product := createRandomProduct(t)
 
-	row, err := testStore.GetProductBySlug(t.Context(), product.Slug)
+	row, err := testStore.GetProductBySlug(t.Context(), db.GetProductBySlugParams{
+		OrganizationID: product.OrganizationID,
+		Slug:           product.Slug,
+	})
 	require.NoError(t, err)
 	require.Equal(t, product.ID, row.ID)
 	require.Equal(t, product.Slug, row.Slug)
@@ -197,18 +206,15 @@ func TestListActiveProductsAfter(t *testing.T) {
 	_, err := testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
 		ID:             p1.ID,
 		OrganizationID: org.ID,
-		Status:         "active",
+		Status:         string(util.ProductStatusActive),
 	})
 	require.NoError(t, err)
-
-	// Wait briefly to ensure distinct created_at timestamps for stable cursor ordering.
-	time.Sleep(100 * time.Millisecond)
 
 	p2 := createRandomProductWithOrg(t, org)
 	_, err = testStore.UpdateProductStatus(t.Context(), db.UpdateProductStatusParams{
 		ID:             p2.ID,
 		OrganizationID: org.ID,
-		Status:         "active",
+		Status:         string(util.ProductStatusActive),
 	})
 	require.NoError(t, err)
 
@@ -233,7 +239,7 @@ func TestListActiveProductsAfter(t *testing.T) {
 		case draft.ID:
 			foundDraft = true
 		}
-		require.Equal(t, "active", r.Status)
+		require.Equal(t, string(util.ProductStatusActive), r.Status)
 	}
 	require.True(t, foundP1)
 	require.True(t, foundP2)

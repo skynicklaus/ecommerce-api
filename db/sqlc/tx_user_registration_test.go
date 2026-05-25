@@ -4,6 +4,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -62,6 +63,18 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 				// User Account
 				require.Equal(t, arg.AccountInfoParams.ProviderID, got.AccountInfo.ProviderID)
 				require.NotEmpty(t, got.AccountInfo.AccountID)
+
+				// Verify hashed password in DB
+				var dbHashedPassword *string
+				err := testPool.QueryRow(
+					t.Context(),
+					"SELECT hashed_password FROM user_accounts WHERE user_id = $1 AND provider_id = $2",
+					got.User.ID,
+					got.AccountInfo.ProviderID,
+				).Scan(&dbHashedPassword)
+				require.NoError(t, err)
+				require.NotNil(t, dbHashedPassword)
+				require.Equal(t, *arg.AccountInfoParams.HashedPassword, *dbHashedPassword)
 
 				// Member
 				require.Equal(t, arg.OrganizationID, got.Member.OrganizationID)
@@ -158,6 +171,10 @@ func TestSQLStore_PlatformUserRegistrationTx(t *testing.T) {
 				require.Equal(t, tt.matchErr, err)
 			} else {
 				require.NoError(t, err)
+				// Delete only the identity — the platform org must not be removed.
+				t.Cleanup(func() {
+					_, _ = testPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", got.Identity.ID)
+				})
 			}
 
 			if tt.check != nil {
@@ -200,6 +217,18 @@ func TestSQLStore_UserRegistrationTx(t *testing.T) {
 				// User Account
 				require.Equal(t, arg.AccountInfoParams.ProviderID, got.AccountInfo.ProviderID)
 				require.NotEmpty(t, got.AccountInfo.AccountID)
+
+				// Verify hashed password in DB
+				var dbHashedPassword *string
+				err := testPool.QueryRow(
+					t.Context(),
+					"SELECT hashed_password FROM user_accounts WHERE user_id = $1 AND provider_id = $2",
+					got.User.ID,
+					got.AccountInfo.ProviderID,
+				).Scan(&dbHashedPassword)
+				require.NoError(t, err)
+				require.NotNil(t, dbHashedPassword)
+				require.Equal(t, *arg.AccountInfoParams.HashedPassword, *dbHashedPassword)
 			},
 		},
 		{
@@ -232,7 +261,11 @@ func TestSQLStore_UserRegistrationTx(t *testing.T) {
 
 				// User Account
 				require.Equal(t, arg.AccountInfoParams.ProviderID, got.AccountInfo.ProviderID)
-				require.NotEmpty(t, got.AccountInfo.AccountID)
+				require.Equal(t, arg.AccountInfoParams.AccountID, got.AccountInfo.AccountID)
+				require.Equal(t, *arg.AccountInfoParams.AccessToken, got.AccountInfo.AccessToken)
+				require.Equal(t, *arg.AccountInfoParams.RefreshToken, got.AccountInfo.RefreshToken)
+				require.Equal(t, *arg.AccountInfoParams.Scope, got.AccountInfo.Scope)
+				require.Equal(t, *arg.AccountInfoParams.IDToken, got.AccountInfo.IDToken)
 			},
 		},
 	}
@@ -245,6 +278,9 @@ func TestSQLStore_UserRegistrationTx(t *testing.T) {
 				require.Equal(t, tt.matchErr, err)
 			} else {
 				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, _ = testPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", got.Identity.ID)
+				})
 			}
 
 			if tt.check != nil {

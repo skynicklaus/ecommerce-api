@@ -90,7 +90,9 @@ func TestRenewSession(t *testing.T) {
 	before, err := testStore.GetSessionWithIdentity(t.Context(), session.Token)
 	require.NoError(t, err)
 
-	time.Sleep(100 * time.Millisecond)
+	require.Eventually(t, func() bool {
+		return time.Now().After(before.UpdatedAt)
+	}, time.Second, 10*time.Millisecond)
 
 	newExpires := time.Now().Add(7 * 24 * time.Hour)
 	err = testStore.RenewSession(t.Context(), db.RenewSessionParams{

@@ -4,6 +4,7 @@
 package db_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -65,6 +66,19 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 
 				// User Account
 				require.Equal(t, arg.AccountInfoParams.ProviderID, got.AccountInfo.ProviderID)
+				require.NotEmpty(t, got.AccountInfo.AccountID)
+
+				// Verify hashed password in DB
+				var dbHashedPassword *string
+				err := testPool.QueryRow(
+					t.Context(),
+					"SELECT hashed_password FROM customer_accounts WHERE customer_id = $1 AND provider_id = $2",
+					got.User.ID,
+					got.AccountInfo.ProviderID,
+				).Scan(&dbHashedPassword)
+				require.NoError(t, err)
+				require.NotNil(t, dbHashedPassword)
+				require.Equal(t, *arg.AccountInfoParams.HashedPassword, *dbHashedPassword)
 
 				// Organization
 				require.Equal(t, arg.Name, got.Organization.Name)
@@ -207,6 +221,10 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 				require.Equal(t, tt.matchErr, err)
 			} else {
 				require.NoError(t, err)
+				t.Cleanup(func() {
+					_, _ = testPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", got.Identity.ID)
+					_, _ = testPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", got.Organization.ID)
+				})
 			}
 
 			if tt.check != nil {
