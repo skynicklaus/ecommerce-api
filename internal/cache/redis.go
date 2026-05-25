@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -16,6 +18,9 @@ type RedisClient struct {
 
 	store  db.Store
 	logger *util.ServerLogger
+
+	roleMu  sync.RWMutex
+	roleMap map[string]db.Role
 }
 
 func NewRedis(store db.Store, logger *util.ServerLogger) *RedisClient {
@@ -30,15 +35,23 @@ func NewRedis(store db.Store, logger *util.ServerLogger) *RedisClient {
 
 		//nolint:exhaustruct // too many unnecessary fields
 		redisClient = redis.NewClient(&redis.Options{
-			Addr:     redisAddr,
-			Password: "",
-			DB:       0,
+			Addr:         redisAddr,
+			Password:     "",
+			DB:           0,
+			PoolSize:     25,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
 		})
 	} else {
 		opts, err := redis.ParseURL(redisURL)
 		if err != nil {
 			logger.Fatal("error parsing  redis URL", slog.Any("err", err))
 		}
+		opts.PoolSize = 25
+		opts.DialTimeout = 5 * time.Second
+		opts.ReadTimeout = 3 * time.Second
+		opts.WriteTimeout = 3 * time.Second
 
 		redisClient = redis.NewClient(opts)
 	}
@@ -49,8 +62,9 @@ func NewRedis(store db.Store, logger *util.ServerLogger) *RedisClient {
 	}
 
 	return &RedisClient{
-		Client: redisClient,
-		store:  store,
-		logger: logger,
+		Client:  redisClient,
+		store:   store,
+		logger:  logger,
+		roleMap: make(map[string]db.Role),
 	}
 }

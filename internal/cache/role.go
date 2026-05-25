@@ -20,100 +20,72 @@ const (
 	RoleCacheDuation              = 15 * time.Minute
 )
 
-func (c *RedisClient) GetSystemPlatformRoleFromSlug(
+func (c *RedisClient) getRoleFromCacheOrDB(
 	ctx context.Context,
+	orgType string,
 	slug string,
 ) (db.Role, error) {
-	roles, err := getRolesJSONCache(
-		ctx,
-		c.logger,
-		c.store,
-		c.Client,
-		string(util.OrganizationTypePlatform),
-	)
+	key := orgType + ":" + slug
+
+	// 1. Thread-safe RLock check
+	c.roleMu.RLock()
+	role, found := c.roleMap[key]
+	c.roleMu.RUnlock()
+	if found {
+		return role, nil
+	}
+
+	// 2. Fetch all system roles for this org type (with JSON caching)
+	roles, err := getRolesJSONCache(ctx, c.logger, c.store, c.Client, orgType)
 	if err != nil {
 		return db.Role{}, err
 	}
 
-	for _, role := range roles {
-		if role.Slug == slug {
-			return role, nil
+	// 3. Thread-safe Write-Lock populate
+	c.roleMu.Lock()
+	var targetRole db.Role
+	var foundTarget bool
+	for _, r := range roles {
+		c.roleMap[orgType+":"+r.Slug] = r
+		if r.Slug == slug {
+			targetRole = r
+			foundTarget = true
 		}
 	}
+	c.roleMu.Unlock()
 
+	if foundTarget {
+		return targetRole, nil
+	}
 	return db.Role{}, ErrRoleNotFound
+}
+
+func (c *RedisClient) GetSystemPlatformRoleFromSlug(
+	ctx context.Context,
+	slug string,
+) (db.Role, error) {
+	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypePlatform), slug)
 }
 
 func (c *RedisClient) GetSystemMerchantRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
-	roles, err := getRolesJSONCache(
-		ctx,
-		c.logger,
-		c.store,
-		c.Client,
-		string(util.OrganizationTypeMerchant),
-	)
-	if err != nil {
-		return db.Role{}, err
-	}
-
-	for _, role := range roles {
-		if role.Slug == slug {
-			return role, nil
-		}
-	}
-
-	return db.Role{}, ErrRoleNotFound
+	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypeMerchant), slug)
 }
 
 func (c *RedisClient) GetSystemIndividualRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
-	roles, err := getRolesJSONCache(
-		ctx,
-		c.logger,
-		c.store,
-		c.Client,
-		string(util.OrganizationTypeIndividual),
-	)
-	if err != nil {
-		return db.Role{}, err
-	}
-
-	for _, role := range roles {
-		if role.Slug == slug {
-			return role, nil
-		}
-	}
-
-	return db.Role{}, ErrRoleNotFound
+	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypeIndividual), slug)
 }
 
 func (c *RedisClient) GetSystemCompanyRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
-	roles, err := getRolesJSONCache(
-		ctx,
-		c.logger,
-		c.store,
-		c.Client,
-		string(util.OrganizationTypeCompany),
-	)
-	if err != nil {
-		return db.Role{}, err
-	}
-
-	for _, role := range roles {
-		if role.Slug == slug {
-			return role, nil
-		}
-	}
-
-	return db.Role{}, ErrRoleNotFound
+	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypeCompany), slug)
 }
 
 func getRolesJSONCache(
