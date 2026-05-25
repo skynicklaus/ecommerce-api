@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -38,6 +39,9 @@ func createRandomRoleWithOrg(t *testing.T, organization *db.Organization) db.Rol
 	role, err := testStore.CreateRole(t.Context(), arg)
 	require.NoError(t, err)
 	require.NotEmpty(t, role)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM roles WHERE id = $1", role.ID)
+	})
 
 	require.Equal(t, arg.RoleName, role.RoleName)
 	require.Equal(t, arg.OrganizationID, role.OrganizationID)
@@ -113,6 +117,9 @@ func TestListOrganizationRolesByType(t *testing.T) {
 			Metadata: nil,
 		})
 		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, _ = testPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", org.ID)
+		})
 		return org
 	}
 
@@ -121,7 +128,17 @@ func TestListOrganizationRolesByType(t *testing.T) {
 
 	roleA := createRandomRoleWithOrg(t, &orgA)
 	roleB := createRandomRoleWithOrg(t, &orgB)
-	sysRole := createRandomRoleWithOrg(t, nil) // NULL org_id — must always appear
+	sysRole, err := testStore.CreateRole(ctx, db.CreateRoleParams{
+		RoleName:         util.GetRandomString(t, 8),
+		OrganizationID:   nil,
+		OrganizationType: string(util.OrganizationTypeMerchant),
+		Slug:             util.GetRandomString(t, 8),
+		IsSystem:         true,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(context.Background(), "DELETE FROM roles WHERE id = $1", sysRole.ID)
+	})
 
 	roles, err := testStore.ListOrganizationRolesByType(ctx, db.ListOrganizationRolesByTypeParams{
 		OrganizationID:   &orgA.ID,
