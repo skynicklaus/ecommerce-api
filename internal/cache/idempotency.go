@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,13 +15,13 @@ const (
 // IdempotencyResultKey is the cache key used to store a successful idempotent
 // CreateProduct response. Exported so tests can construct the same key.
 func IdempotencyResultKey(organizationID uuid.UUID, idempotencyKey string) string {
-	return fmt.Sprintf("%s%s:%s", idempotencyResultPrefix, organizationID.String(), idempotencyKey)
+	return idempotencyResultPrefix + organizationID.String() + ":" + idempotencyKey
 }
 
 // IdempotencyLockKey is the cache key used as a short-lived lock for an
 // in-flight idempotent request. Exported so tests can simulate a held lock.
 func IdempotencyLockKey(organizationID uuid.UUID, idempotencyKey string) string {
-	return fmt.Sprintf("%s%s:%s", idempotencyLockPrefix, organizationID.String(), idempotencyKey)
+	return idempotencyLockPrefix + organizationID.String() + ":" + idempotencyKey
 }
 
 func (c *RedisClient) GetIdempotentProductResult(
