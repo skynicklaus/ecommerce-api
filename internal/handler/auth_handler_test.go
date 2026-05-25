@@ -4,6 +4,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -31,12 +32,18 @@ func TestAuthFlows_Integration(t *testing.T) {
 	// 1. Read configuration from environment
 	dbSource := os.Getenv("DB_SOURCE")
 	if dbSource == "" {
-		dbSource = "postgresql://app_system:system_secret@localhost:5432/ecommerce?sslmode=disable"
+		t.Skip("DB_SOURCE not set")
 	}
 
 	connPool, err := pgxpool.New(ctx, dbSource)
 	require.NoError(t, err)
-	defer connPool.Close()
+	t.Cleanup(connPool.Close)
+	t.Cleanup(func() {
+		http.DefaultClient.CloseIdleConnections()
+		if tr, ok := http.DefaultTransport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
+	})
 
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
@@ -46,7 +53,7 @@ func TestAuthFlows_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
-	midware := middleware.New(store)
+	midware := middleware.New(store, redisClient)
 
 	// Create test Chi router
 	r := chi.NewRouter()
@@ -84,6 +91,9 @@ func TestAuthFlows_Integration(t *testing.T) {
 		Metadata: nil,
 	})
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", org.ID)
+	})
 
 	pass := "supersecure123"
 	hashedPass, err := password.HashPassword(pass)
@@ -93,6 +103,9 @@ func TestAuthFlows_Integration(t *testing.T) {
 	custEmail := "buyer-" + uuid.New().String()[:8] + "@test.com"
 	custIdent, err := store.CreateIdentity(ctx, string(util.IdentityCustomer))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", custIdent.ID)
+	})
 	customer, err := store.CreateCustomer(ctx, db.CreateCustomerParams{
 		IdentityID: custIdent.ID,
 		Name:       "John Buyer",
@@ -117,6 +130,9 @@ func TestAuthFlows_Integration(t *testing.T) {
 	merchEmail := "merchant-" + uuid.New().String()[:8] + "@test.com"
 	merchIdent, err := store.CreateIdentity(ctx, string(util.IdentityUser))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", merchIdent.ID)
+	})
 	merchUser, err := store.CreateUser(ctx, db.CreateUserParams{
 		IdentityID: merchIdent.ID,
 		Name:       "Jane Merchant",
@@ -194,6 +210,19 @@ func TestAuthFlows_Integration(t *testing.T) {
 		meRR2 := httptest.NewRecorder()
 		r.ServeHTTP(meRR2, meReq2)
 		require.Equal(t, http.StatusUnauthorized, meRR2.Code)
+	})
+
+	t.Run("Merchant Cannot Login To Admin Panel", func(t *testing.T) {
+		reqBody, _ := json.Marshal(LoginRequest{
+			Email:    merchEmail,
+			Password: pass,
+		})
+		req, _ := http.NewRequest("POST", "/v1/auth/admin/login", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		r.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("Merchant Login Success", func(t *testing.T) {
@@ -359,12 +388,18 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 
 	dbSource := os.Getenv("DB_SOURCE")
 	if dbSource == "" {
-		dbSource = "postgresql://app_system:system_secret@localhost:5432/ecommerce?sslmode=disable"
+		t.Skip("DB_SOURCE not set")
 	}
 
 	connPool, err := pgxpool.New(ctx, dbSource)
 	require.NoError(t, err)
-	defer connPool.Close()
+	t.Cleanup(connPool.Close)
+	t.Cleanup(func() {
+		http.DefaultClient.CloseIdleConnections()
+		if tr, ok := http.DefaultTransport.(*http.Transport); ok {
+			tr.CloseIdleConnections()
+		}
+	})
 
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
@@ -374,7 +409,7 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
-	midware := middleware.New(store)
+	midware := middleware.New(store, redisClient)
 
 	r := chi.NewRouter()
 	r.Post("/v1/auth/admin/login", makeTestHandler(h.LoginAdmin))
@@ -389,7 +424,10 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 		r.Get("/v1/auth/customer/me", makeTestHandler(h.GetMe))
 	})
 
-	// Seed admin user — no platform org membership required for login itself.
+	platformOrg, err := store.GetOrganizationBySlug(ctx, string(util.OrganizationTypePlatform))
+	require.NoError(t, err)
+
+	// Seed admin user with platform org membership.
 	adminEmail := "admin-flow-" + uuid.New().String()[:8] + "@test.com"
 	pass := "supersecure123"
 	hashedPass, err := password.HashPassword(pass)
@@ -397,6 +435,9 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 
 	adminIdent, err := store.CreateIdentity(ctx, string(util.IdentityUser))
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", adminIdent.ID)
+	})
 	adminUser, err := store.CreateUser(ctx, db.CreateUserParams{
 		IdentityID: adminIdent.ID,
 		Name:       "Platform Admin",
@@ -414,6 +455,11 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 		RefreshTokenExpiresAt: nil,
 		IDToken:               nil,
 		Scope:                 nil,
+	})
+	require.NoError(t, err)
+	_, err = store.CreateMember(ctx, db.CreateMemberParams{
+		IdentityID:     adminIdent.ID,
+		OrganizationID: platformOrg.ID,
 	})
 	require.NoError(t, err)
 
