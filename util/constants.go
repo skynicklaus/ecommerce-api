@@ -82,3 +82,12 @@ const (
 	ProductAssetVideo    ProductAssetType = "video"
 	ProductAssetDocument ProductAssetType = "document"
 )
+
+type ProductStatus string
+
+const (
+	ProductStatusDraft     ProductStatus = "draft"
+	ProductStatusActive    ProductStatus = "active"
+	ProductStatusArchived  ProductStatus = "archived"
+	ProductStatusSuspended ProductStatus = "suspended"
+)
