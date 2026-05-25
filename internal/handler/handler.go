@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/go-playground/validator/v10"
+	"golang.org/x/sync/singleflight"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/internal/allowed"
@@ -18,11 +19,17 @@ type Handler interface {
 	// Organization
 	CreateOrganization(http.ResponseWriter, *http.Request) error
 
-	// Product
+	// Product — storefront (public)
+	GetActiveProductDetails(http.ResponseWriter, *http.Request) error
+	ListActiveProducts(http.ResponseWriter, *http.Request) error
+
+	// Product — merchant catalog (authenticated)
 	CreateProduct(http.ResponseWriter, *http.Request) error
 	UpdateProductStatus(http.ResponseWriter, *http.Request) error
-	GetProductDetails(http.ResponseWriter, *http.Request) error
-	ListProducts(http.ResponseWriter, *http.Request) error
+	UpdateProduct(http.ResponseWriter, *http.Request) error
+	DeleteProduct(http.ResponseWriter, *http.Request) error
+	ListMerchantProducts(http.ResponseWriter, *http.Request) error
+	GetMerchantProductDetails(http.ResponseWriter, *http.Request) error
 
 	// Product Asset
 	PreUploadAssets(http.ResponseWriter, *http.Request) error
@@ -58,6 +65,7 @@ type V1Handler struct {
 	bucket        *string
 	maxImageSize  int64
 	maxVideoSize  int64
+	presignG      singleflight.Group
 }
 
 func NewV1Handler(
@@ -92,6 +100,7 @@ func NewV1Handler(
 		bucket:        &bucket,
 		maxImageSize:  config.MaxImageSize,
 		maxVideoSize:  config.MaxVideoSize,
+		presignG:      singleflight.Group{},
 	}
 }
 
