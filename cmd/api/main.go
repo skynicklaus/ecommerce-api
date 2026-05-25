@@ -55,7 +55,16 @@ func run(logger *util.ServerLogger) (<-chan error, error) {
 		return nil, errors.New("no DB_SOURCE env var set")
 	}
 
-	connPool, err := pgxpool.New(context.Background(), dbSource)
+	config, err := pgxpool.ParseConfig(dbSource)
+	if err != nil {
+		return nil, err
+	}
+	config.MaxConns = 25
+	config.MinConns = 5
+	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = time.Minute
+
+	connPool, err := pgxpool.NewWithConfig(context.Background(), config)
 	if err != nil {
 		return nil, err
 	}
