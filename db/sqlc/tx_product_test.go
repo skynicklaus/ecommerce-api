@@ -163,7 +163,10 @@ func TestSQLStore_CreateProductTx(t *testing.T) {
 		require.Error(t, txErr)
 
 		// Transaction must have rolled back — the product slug must not exist.
-		_, getErr := testStore.GetProductBySlug(ctx, slug)
+		_, getErr := testStore.GetProductBySlug(ctx, db.GetProductBySlugParams{
+			OrganizationID: org.ID,
+			Slug:           slug,
+		})
 		require.Error(t, getErr, "product must not exist after a rolled-back transaction")
 	})
 }
