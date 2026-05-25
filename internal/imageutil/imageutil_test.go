@@ -54,27 +54,45 @@ func injectEXIF(jpegBytes []byte) []byte {
 	return out
 }
 
+
 func TestValidateAndStrip(t *testing.T) {
+	t.Parallel()
+
 	t.Run("valid jpeg", func(t *testing.T) {
-		buf, err := createTestImage(300, 300, "jpeg")
+		t.Parallel()
+		buf, err := createTestImage(minImageDimension, minImageDimension, "jpeg")
 		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
 		require.NoError(t, err)
 		require.NotEmpty(t, out)
+
+		cfg, format, decodeErr := image.DecodeConfig(bytes.NewReader(out))
+		require.NoError(t, decodeErr)
+		require.Equal(t, "jpeg", format)
+		require.Equal(t, minImageDimension, cfg.Width)
+		require.Equal(t, minImageDimension, cfg.Height)
 	})
 
 	t.Run("valid webp", func(t *testing.T) {
-		buf, err := createTestImage(300, 300, "webp")
+		t.Parallel()
+		buf, err := createTestImage(minImageDimension, minImageDimension, "webp")
 		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
 		require.NoError(t, err)
 		require.NotEmpty(t, out)
+
+		cfg, format, decodeErr := image.DecodeConfig(bytes.NewReader(out))
+		require.NoError(t, decodeErr)
+		require.Equal(t, "webp", format)
+		require.Equal(t, minImageDimension, cfg.Width)
+		require.Equal(t, minImageDimension, cfg.Height)
 	})
 
 	t.Run("too small", func(t *testing.T) {
-		buf, err := createTestImage(299, 300, "jpeg")
+		t.Parallel()
+		buf, err := createTestImage(minImageDimension-1, minImageDimension, "jpeg")
 		require.NoError(t, err)
 
 		_, err = ValidateAndStrip(buf)
@@ -82,6 +100,7 @@ func TestValidateAndStrip(t *testing.T) {
 	})
 
 	t.Run("too large", func(t *testing.T) {
+		t.Parallel()
 		buf, err := createTestImage(8000, 8000, "jpeg")
 		require.NoError(t, err)
 
@@ -90,16 +109,24 @@ func TestValidateAndStrip(t *testing.T) {
 	})
 
 	t.Run("valid png", func(t *testing.T) {
-		buf, err := createTestImage(300, 300, "png")
+		t.Parallel()
+		buf, err := createTestImage(minImageDimension, minImageDimension, "png")
 		require.NoError(t, err)
 
 		out, err := ValidateAndStrip(buf)
 		require.NoError(t, err)
 		require.NotEmpty(t, out)
+
+		cfg, format, decodeErr := image.DecodeConfig(bytes.NewReader(out))
+		require.NoError(t, decodeErr)
+		require.Equal(t, "png", format)
+		require.Equal(t, minImageDimension, cfg.Width)
+		require.Equal(t, minImageDimension, cfg.Height)
 	})
 
 	t.Run("strips jpeg metadata", func(t *testing.T) {
-		base, err := createTestImage(300, 300, "jpeg")
+		t.Parallel()
+		base, err := createTestImage(minImageDimension, minImageDimension, "jpeg")
 		require.NoError(t, err)
 		tagged := injectEXIF(base)
 
@@ -109,16 +136,21 @@ func TestValidateAndStrip(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, bytes.Contains(out, []byte("Exif")), "output still contains EXIF metadata after strip")
 
-		_, _, decodeErr := image.DecodeConfig(bytes.NewReader(out))
+		cfg, format, decodeErr := image.DecodeConfig(bytes.NewReader(out))
 		require.NoError(t, decodeErr, "output is not a valid image")
+		require.Equal(t, "jpeg", format)
+		require.Equal(t, minImageDimension, cfg.Width)
+		require.Equal(t, minImageDimension, cfg.Height)
 	})
 
 	t.Run("corrupted input", func(t *testing.T) {
+		t.Parallel()
 		_, err := ValidateAndStrip([]byte("this is not an image"))
 		require.Error(t, err)
 	})
 
 	t.Run("truncated header", func(t *testing.T) {
+		t.Parallel()
 		pngSignature := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
 		_, err := ValidateAndStrip(pngSignature)
 		require.Error(t, err)
