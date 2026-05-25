@@ -12,19 +12,19 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_categories_slug ON categories 
     )
 );
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_organization_id ON products (organization_id);
-
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_category_id ON products (category_id);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_organization_created_id ON products (organization_id, created_at DESC, id DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_active_created_id ON products (created_at DESC, id DESC)
+WHERE
+    STATUS = 'active';
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_products_organization_slug ON products (organization_id, slug);
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_products_org_idem_key ON products (organization_id, idempotency_key)
 WHERE
     idempotency_key IS NOT NULL;
-
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_active_created_id ON products (created_at DESC, id DESC)
-WHERE
-    STATUS = 'active';
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_variants_product_id ON product_variants (product_id);
 
@@ -33,6 +33,8 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_product_variants_organization_
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_product_assets_primary ON product_assets (product_id)
 WHERE
     is_primary = TRUE;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_assets_product_id ON product_assets (product_id, sort_order);
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_product_assets_variant ON product_assets (product_variant_id);
 
@@ -62,14 +64,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_attribute_values_organization_id ON 
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_attribute_values_value ON attribute_values (attribute_id, lower(trim(value)));
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_variant_attributes_product_variant ON product_variant_attributes (product_variant_id);
-
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_variant_attributes_attribute_value ON product_variant_attributes (attribute_value_id);
 
 -- +goose Down
 DROP INDEX CONCURRENTLY IF EXISTS idx_product_variant_attributes_attribute_value;
-
-DROP INDEX CONCURRENTLY IF EXISTS idx_product_variant_attributes_product_variant;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_attribute_values_value;
 
@@ -91,21 +89,23 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_warehouses_organization_id;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_product_assets_variant;
 
+DROP INDEX CONCURRENTLY IF EXISTS idx_product_assets_product_id;
+
 DROP INDEX CONCURRENTLY IF EXISTS uq_product_assets_primary;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_product_variants_organization_sku;
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_product_variants_product_id;
 
-DROP INDEX CONCURRENTLY IF EXISTS idx_products_active_created_id;
-
 DROP INDEX CONCURRENTLY IF EXISTS uq_products_org_idem_key;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_products_organization_slug;
 
-DROP INDEX CONCURRENTLY IF EXISTS idx_products_category_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_products_active_created_id;
 
-DROP INDEX CONCURRENTLY IF EXISTS idx_categories_organization_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_products_organization_created_id;
+
+DROP INDEX CONCURRENTLY IF EXISTS idx_products_category_id;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_categories_slug;
 
