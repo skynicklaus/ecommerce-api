@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // id
 	}
 
 	// Read the body fully so we can hash the exact bytes the client sent.
-	r.Body = http.MaxBytesReader(w, r.Body, maxCreateProductBodySize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	body, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
 		return apierror.NewAPIError(
@@ -239,7 +240,7 @@ func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // id
 	if err != nil { //nolint:nestif // unique-violation fallback requires nested lookup after a raced commit
 		// Last-resort idempotency: another worker beat us past the Redis lock and persisted first.
 		// The partial UNIQUE index on (organization_id, idempotency_key) fires here.
-		if idempotencyKey != "" && db.IsUniqueViolation(err) {
+		if idempotencyKey != "" && db.ConstraintName(err) == "uq_products_org_idem_key" {
 			existing, found, dbErr := h.lookupIdempotentResultFromDB(
 				ctx, organization.ID, idempotencyKey,
 			)
@@ -255,6 +256,9 @@ func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // id
 				_ = h.cache.ReleaseIdempotencyLock(ctx, organization.ID, idempotencyKey)
 				return WriteJSON(w, http.StatusOK, existing)
 			}
+		}
+		if apiErr, ok := productTxAPIError(err); ok {
+			return apiErr
 		}
 		return fmt.Errorf("failed to save product details: %w", err)
 	}
@@ -272,6 +276,46 @@ func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // id
 	}
 
 	return WriteJSON(w, http.StatusCreated, result)
+}
+
+func productTxAPIError(err error) (apierror.APIError, bool) {
+	switch db.ConstraintName(err) {
+	case "uq_products_organization_slug":
+		return apierror.NewAPIError(
+			http.StatusConflict,
+			errors.New("product slug already exists"),
+		), true
+	case "uq_product_variants_organization_sku":
+		return apierror.NewAPIError(
+			http.StatusConflict,
+			errors.New("product variant sku already exists"),
+		), true
+	case "uq_product_assets_primary":
+		return apierror.NewAPIError(
+			http.StatusUnprocessableEntity,
+			errors.New("only one primary product asset is allowed"),
+		), true
+	case "uq_product_assets_variant":
+		return apierror.NewAPIError(
+			http.StatusUnprocessableEntity,
+			errors.New("only one asset is allowed per product variant"),
+		), true
+	}
+
+	switch db.ErrorCode(err) {
+	case db.ForeignKeyViolation:
+		return apierror.NewAPIError(
+			http.StatusUnprocessableEntity,
+			errors.New("invalid category, variant, or attribute reference"),
+		), true
+	case db.CheckViolation:
+		return apierror.NewAPIError(
+			http.StatusUnprocessableEntity,
+			errors.New("invalid product data"),
+		), true
+	}
+
+	return apierror.APIError{}, false
 }
 
 func collectAssetTokens(req *CreateProductRequest) ([]string, error) {
@@ -308,8 +352,8 @@ func collectAssetTokens(req *CreateProductRequest) ([]string, error) {
 
 func buildAssetParams(req ProductAssetReq, pending PendingUpload) db.ProductAssetParams {
 	var duration *int16
-	if pending.Type == string(util.ProductAssetVideo) {
-		d := int16(pending.DurationSeconds)
+	if pending.Type == string(util.ProductAssetVideo) && pending.DurationSeconds > 0 {
+		d := int16(math.Round(pending.DurationSeconds))
 		duration = &d
 	}
 	return db.ProductAssetParams{
@@ -434,17 +478,30 @@ func (h *V1Handler) ResolveAssetURL(ctx context.Context, key string) (string, er
 		return cachedURL, nil
 	}
 
-	presignedURL, err := h.storage.PresignGetObject(ctx, *h.bucket, key, 1*time.Hour)
+	val, err, _ := h.presignG.Do(key, func() (any, error) {
+		// Double check cache under singleflight to minimize S3 hits
+		if cachedURL, err := h.cache.GetPresignedURL(ctx, key); err == nil && cachedURL != "" {
+			return cachedURL, nil
+		}
+
+		presignedURL, err := h.storage.PresignGetObject(ctx, *h.bucket, key, 1*time.Hour)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate presigned S3 URL: %w", err)
+		}
+
+		// Cache lifetime is shorter than the S3 signature so clients pulled near the
+		// cache TTL boundary still have headroom.
+		//nolint:mnd // 50 minute cache TTL
+		_ = h.cache.CachePresignedURL(ctx, key, presignedURL, 50*time.Minute)
+
+		return presignedURL, nil
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned S3 URL: %w", err)
+		return "", err
 	}
 
-	// Cache lifetime is shorter than the S3 signature so clients pulled near the
-	// cache TTL boundary still have headroom.
-	//nolint:mnd // 50 minute cache TTL
-	_ = h.cache.CachePresignedURL(ctx, key, presignedURL, 50*time.Minute)
-
-	return presignedURL, nil
+	//nolint:errcheck // prefer to panic when encounter bug
+	return val.(string), nil
 }
 
 type AssetResponse struct {
@@ -494,42 +551,16 @@ type ProductDetailsResponse struct {
 	Variants       []VariantResponse `json:"variants"`
 }
 
-func (h *V1Handler) fetchProductBySlugOrID(
-	ctx context.Context,
-	slugOrID string,
-) (db.GetActiveProductByIDRow, error) {
-	if parsedID, err := uuid.Parse(slugOrID); err == nil {
-		p, pErr := h.store.GetActiveProductByID(ctx, parsedID)
-		if pErr != nil {
-			if errors.Is(pErr, db.ErrNotFound) {
-				return db.GetActiveProductByIDRow{}, apierror.NewAPIError(
-					http.StatusNotFound,
-					fmt.Errorf("product not found: %s", slugOrID),
-				)
-			}
-			return db.GetActiveProductByIDRow{}, fmt.Errorf("failed to fetch product: %w", pErr)
-		}
-		return p, nil
-	}
-
-	p, pErr := h.store.GetActiveProductBySlug(ctx, slugOrID)
-	if pErr != nil {
-		if errors.Is(pErr, db.ErrNotFound) {
-			return db.GetActiveProductByIDRow{}, apierror.NewAPIError(
-				http.StatusNotFound,
-				fmt.Errorf("product not found: %s", slugOrID),
-			)
-		}
-		return db.GetActiveProductByIDRow{}, fmt.Errorf("failed to fetch product: %w", pErr)
-	}
-	return db.GetActiveProductByIDRow(p), nil
-}
-
-func (h *V1Handler) GetProductDetails( //nolint:funlen
+func (h *V1Handler) GetActiveProductDetails( //nolint:funlen
 	w http.ResponseWriter,
 	r *http.Request,
 ) error {
 	ctx := r.Context()
+	orgID, err := uuid.Parse(chi.URLParam(r, "org_id"))
+	if err != nil {
+		return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid org_id"))
+	}
+
 	slugOrID := chi.URLParam(r, "slug_or_id")
 	if slugOrID == "" {
 		return apierror.NewAPIError(
@@ -538,13 +569,44 @@ func (h *V1Handler) GetProductDetails( //nolint:funlen
 		)
 	}
 
-	p, fetchErr := h.fetchProductBySlugOrID(ctx, slugOrID)
-	if fetchErr != nil {
-		return fetchErr
+	var p db.GetActiveProductByIDRow
+	//nolint:nestif // dynamic product query
+	if parsedID, parseErr := uuid.Parse(slugOrID); parseErr == nil {
+		row, pErr := h.store.GetActiveProductByID(ctx, parsedID)
+		if pErr != nil {
+			if errors.Is(pErr, db.ErrNotFound) {
+				return apierror.NewAPIError(
+					http.StatusNotFound,
+					fmt.Errorf("product not found: %s", slugOrID),
+				)
+			}
+			return fmt.Errorf("failed to fetch product: %w", pErr)
+		}
+		if row.OrganizationID != orgID {
+			return apierror.NewAPIError(
+				http.StatusNotFound,
+				fmt.Errorf("product not found: %s", slugOrID),
+			)
+		}
+		p = row
+	} else {
+		row, pErr := h.store.GetActiveProductBySlug(ctx, db.GetActiveProductBySlugParams{
+			OrganizationID: orgID,
+			Slug:           slugOrID,
+		})
+		if pErr != nil {
+			if errors.Is(pErr, db.ErrNotFound) {
+				return apierror.NewAPIError(
+					http.StatusNotFound,
+					fmt.Errorf("product not found: %s", slugOrID),
+				)
+			}
+			return fmt.Errorf("failed to fetch product: %w", pErr)
+		}
+		p = db.GetActiveProductByIDRow(row)
 	}
 
 	productID := p.ID
-	organizationID := p.OrganizationID
 	categoryID := p.CategoryID
 	name := p.Name
 	slug := p.Slug
@@ -570,18 +632,9 @@ func (h *V1Handler) GetProductDetails( //nolint:funlen
 		return fmt.Errorf("failed to fetch attributes: %w", err)
 	}
 
-	// Group assets and attributes
-	urlMap := make(map[string]string)
-	for _, asset := range assets {
-		if _, exists := urlMap[asset.AssetKey]; !exists {
-			presigned, presignErr := h.ResolveAssetURL(ctx, asset.AssetKey)
-			if presignErr == nil {
-				urlMap[asset.AssetKey] = presigned
-			}
-		}
-	}
+	urlMap := h.resolveAssetURLsParallel(ctx, assets)
 
-	attrMap := make(map[uuid.UUID][]AttributeResponse)
+	attrMap := make(map[uuid.UUID][]AttributeResponse, len(attrs))
 	for _, a := range attrs {
 		attrMap[a.ProductVariantID] = append(attrMap[a.ProductVariantID], AttributeResponse{
 			AttributeID:         a.AttributeID,
@@ -594,7 +647,7 @@ func (h *V1Handler) GetProductDetails( //nolint:funlen
 	}
 
 	var productAssets []AssetResponse
-	variantAssetMap := make(map[uuid.UUID]AssetResponse)
+	variantAssetMap := make(map[uuid.UUID]AssetResponse, len(assets))
 	for _, a := range assets {
 		resp := AssetResponse{
 			ID:              a.ID,
@@ -633,7 +686,7 @@ func (h *V1Handler) GetProductDetails( //nolint:funlen
 
 	res := ProductDetailsResponse{
 		ID:             productID,
-		OrganizationID: organizationID,
+		OrganizationID: orgID,
 		CategoryID:     categoryID,
 		Name:           name,
 		Slug:           slug,
@@ -655,8 +708,71 @@ type ListProductsResponse struct {
 	NextCursor *string                  `json:"nextCursor"`
 }
 
+// productListRow is a common adaptor for the two distinct sqlc row types returned by
+// listing queries. Both queries select the same columns; this type lets the shared
+// assembly loop work without duplicating it per query.
+type productListRow struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	CategoryID     uuid.UUID
+	Name           string
+	Slug           string
+	Description    []byte
+	Status         string
+	IsFeatured     bool
+	Specification  []byte
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func buildProductResponseList(
+	products []productListRow,
+	variantsByProduct map[uuid.UUID][]db.ProductVariant,
+	attrsByVariant map[uuid.UUID][]AttributeResponse,
+	productAssetsByProduct map[uuid.UUID][]AssetResponse,
+	variantAssetByVariant map[uuid.UUID]AssetResponse,
+) []ProductDetailsResponse {
+	resList := make([]ProductDetailsResponse, len(products))
+	for i, product := range products {
+		productVariants := variantsByProduct[product.ID]
+		variantResponses := make([]VariantResponse, len(productVariants))
+		for j, v := range productVariants {
+			var variantAsset *AssetResponse
+			if va, ok := variantAssetByVariant[v.ID]; ok {
+				variantAsset = &va
+			}
+			variantResponses[j] = VariantResponse{
+				ID:             v.ID,
+				Sku:            v.Sku,
+				Name:           v.Name,
+				Price:          v.Price,
+				TrackInventory: v.TrackInventory,
+				IsActive:       v.IsActive,
+				Attributes:     attrsByVariant[v.ID],
+				Asset:          variantAsset,
+			}
+		}
+		resList[i] = ProductDetailsResponse{
+			ID:             product.ID,
+			OrganizationID: product.OrganizationID,
+			CategoryID:     product.CategoryID,
+			Name:           product.Name,
+			Slug:           product.Slug,
+			Description:    json.RawMessage(product.Description),
+			Status:         product.Status,
+			Specification:  json.RawMessage(product.Specification),
+			IsFeatured:     product.IsFeatured,
+			CreatedAt:      product.CreatedAt,
+			UpdatedAt:      product.UpdatedAt,
+			Assets:         productAssetsByProduct[product.ID],
+			Variants:       variantResponses,
+		}
+	}
+	return resList
+}
+
 //nolint:funlen
-func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
+func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
 	limit := parseLimit(r)
@@ -717,7 +833,7 @@ func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 		variantsByProduct[v.ProductID] = append(variantsByProduct[v.ProductID], v)
 	}
 
-	attrsByVariant := make(map[uuid.UUID][]AttributeResponse)
+	attrsByVariant := make(map[uuid.UUID][]AttributeResponse, len(attrs))
 	for _, a := range attrs {
 		attrsByVariant[a.ProductVariantID] = append(
 			attrsByVariant[a.ProductVariantID],
@@ -732,8 +848,8 @@ func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 		)
 	}
 
-	productAssetsByProduct := make(map[uuid.UUID][]AssetResponse)
-	variantAssetByVariant := make(map[uuid.UUID]AssetResponse)
+	productAssetsByProduct := make(map[uuid.UUID][]AssetResponse, len(products))
+	variantAssetByVariant := make(map[uuid.UUID]AssetResponse, len(assets))
 	for _, a := range assets {
 		resp := AssetResponse{
 			ID:              a.ID,
@@ -752,46 +868,24 @@ func (h *V1Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	resList := make([]ProductDetailsResponse, len(products))
-	for i, product := range products {
-		productVariants := variantsByProduct[product.ID]
-		variantResponses := make([]VariantResponse, len(productVariants))
-		for j, v := range productVariants {
-			var variantAsset *AssetResponse
-			if va, ok := variantAssetByVariant[v.ID]; ok {
-				variantAsset = &va
-			}
-			variantResponses[j] = VariantResponse{
-				ID:             v.ID,
-				Sku:            v.Sku,
-				Name:           v.Name,
-				Price:          v.Price,
-				TrackInventory: v.TrackInventory,
-				IsActive:       v.IsActive,
-				Attributes:     attrsByVariant[v.ID],
-				Asset:          variantAsset,
-			}
-		}
-
-		resList[i] = ProductDetailsResponse{
-			ID:             product.ID,
-			OrganizationID: product.OrganizationID,
-			CategoryID:     product.CategoryID,
-			Name:           product.Name,
-			Slug:           product.Slug,
-			Description:    json.RawMessage(product.Description),
-			Status:         product.Status,
-			Specification:  json.RawMessage(product.Specification),
-			IsFeatured:     product.IsFeatured,
-			CreatedAt:      product.CreatedAt,
-			UpdatedAt:      product.UpdatedAt,
-			Assets:         productAssetsByProduct[product.ID],
-			Variants:       variantResponses,
+	rows := make([]productListRow, len(products))
+	for i, p := range products {
+		rows[i] = productListRow{
+			ID: p.ID, OrganizationID: p.OrganizationID, CategoryID: p.CategoryID,
+			Name: p.Name, Slug: p.Slug, Description: p.Description,
+			Status: p.Status, IsFeatured: p.IsFeatured, Specification: p.Specification,
+			CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 		}
 	}
 
 	return WriteJSON(w, http.StatusOK, ListProductsResponse{
-		Data:       resList,
+		Data: buildProductResponseList(
+			rows,
+			variantsByProduct,
+			attrsByVariant,
+			productAssetsByProduct,
+			variantAssetByVariant,
+		),
 		NextCursor: nextCursor,
 	})
 }
@@ -898,9 +992,8 @@ func decodeCursor(cursor string) (time.Time, uuid.UUID, error) {
 }
 
 const (
-	maxCreateProductBodySize = 1 << 20 // 1 MB
-	idempotencyLockTTL       = 2 * time.Minute
-	idempotencyCacheTTL      = 24 * time.Hour
+	idempotencyLockTTL  = 2 * time.Minute
+	idempotencyCacheTTL = 24 * time.Hour
 )
 
 type idempotencyCacheEntry struct {
@@ -1004,4 +1097,591 @@ func (h *V1Handler) cacheIdempotentResult(
 			slog.Any("err", setErr),
 		)
 	}
+}
+
+func (h *V1Handler) ListMerchantProducts( //nolint:funlen
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
+	ctx := r.Context()
+	org, ctxErr := organizationFromCtx(ctx)
+	if ctxErr != nil {
+		return ctxErr
+	}
+
+	limit := parseLimit(r)
+
+	afterCreatedAt, afterID, cursorErr := decodeCursor(r.URL.Query().Get("cursor"))
+	if cursorErr != nil {
+		return apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("invalid cursor: %w", cursorErr),
+		)
+	}
+
+	allowedStatuses := map[string]struct{}{
+		"active":    {},
+		"draft":     {},
+		"archived":  {},
+		"suspended": {},
+	}
+	statuses := []string{"active", "draft", "archived", "suspended"}
+	if rawStatus := r.URL.Query().Get("status"); rawStatus != "" {
+		requested := strings.Split(rawStatus, ",")
+		for _, s := range requested {
+			if _, ok := allowedStatuses[s]; !ok {
+				return apierror.NewAPIError(
+					http.StatusBadRequest,
+					fmt.Errorf(
+						"invalid status %q: must be one of active, draft, archived, suspended",
+						s,
+					),
+				)
+			}
+		}
+		statuses = requested
+	}
+
+	products, err := h.store.ListProductsByOrganizationWithStatus(
+		ctx,
+		db.ListProductsByOrganizationWithStatusParams{
+			OrganizationID: org.ID,
+			Statuses:       statuses,
+			AfterCreatedAt: afterCreatedAt,
+			AfterID:        afterID,
+			PageLimit:      limit,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to list merchant products: %w", err)
+	}
+
+	var nextCursor *string
+	if len(products) == int(limit) && len(products) > 0 {
+		last := products[len(products)-1]
+		encoded := encodeCursor(last.CreatedAt, last.ID)
+		nextCursor = &encoded
+	}
+
+	if len(products) == 0 {
+		return WriteJSON(w, http.StatusOK, ListProductsResponse{
+			Data:       []ProductDetailsResponse{},
+			NextCursor: nextCursor,
+		})
+	}
+
+	productIDs := make([]uuid.UUID, len(products))
+	for i, p := range products {
+		productIDs[i] = p.ID
+	}
+
+	variants, err := h.store.ListProductVariantsByProductIDs(ctx, productIDs)
+	if err != nil {
+		return fmt.Errorf("failed to fetch variants: %w", err)
+	}
+	assets, err := h.store.ListProductAssetsByProductIDs(ctx, productIDs)
+	if err != nil {
+		return fmt.Errorf("failed to fetch assets: %w", err)
+	}
+	attrs, err := h.store.ListVariantAttributesByProductIDs(ctx, productIDs)
+	if err != nil {
+		return fmt.Errorf("failed to fetch attributes: %w", err)
+	}
+
+	urlMap := h.resolveAssetURLsParallel(ctx, assets)
+
+	variantsByProduct := make(map[uuid.UUID][]db.ProductVariant, len(products))
+	for _, v := range variants {
+		variantsByProduct[v.ProductID] = append(variantsByProduct[v.ProductID], v)
+	}
+
+	attrsByVariant := make(map[uuid.UUID][]AttributeResponse, len(attrs))
+	for _, a := range attrs {
+		attrsByVariant[a.ProductVariantID] = append(
+			attrsByVariant[a.ProductVariantID],
+			AttributeResponse{
+				AttributeID:         a.AttributeID,
+				AttributeName:       a.AttributeName,
+				AttributeSlug:       a.AttributeSlug,
+				AttributeValueID:    a.AttributeValueID,
+				AttributeValue:      a.AttributeValue,
+				AttributeValueLabel: a.AttributeValueLabel,
+			},
+		)
+	}
+
+	productAssetsByProduct := make(map[uuid.UUID][]AssetResponse, len(products))
+	variantAssetByVariant := make(map[uuid.UUID]AssetResponse, len(assets))
+	for _, a := range assets {
+		resp := AssetResponse{
+			ID:              a.ID,
+			URL:             urlMap[a.AssetKey],
+			Type:            a.Type,
+			MimeType:        a.MimeType,
+			AltText:         a.AltText,
+			SortOrder:       a.SortOrder,
+			IsPrimary:       a.IsPrimary,
+			DurationSeconds: a.DurationSeconds,
+		}
+		if a.ProductVariantID == nil {
+			productAssetsByProduct[a.ProductID] = append(productAssetsByProduct[a.ProductID], resp)
+		} else {
+			variantAssetByVariant[*a.ProductVariantID] = resp
+		}
+	}
+
+	rows := make([]productListRow, len(products))
+	for i, p := range products {
+		rows[i] = productListRow{
+			ID: p.ID, OrganizationID: p.OrganizationID, CategoryID: p.CategoryID,
+			Name: p.Name, Slug: p.Slug, Description: p.Description,
+			Status: p.Status, IsFeatured: p.IsFeatured, Specification: p.Specification,
+			CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, ListProductsResponse{
+		Data: buildProductResponseList(
+			rows,
+			variantsByProduct,
+			attrsByVariant,
+			productAssetsByProduct,
+			variantAssetByVariant,
+		),
+		NextCursor: nextCursor,
+	})
+}
+
+func (h *V1Handler) GetMerchantProductDetails( //nolint:funlen
+	w http.ResponseWriter,
+	r *http.Request,
+) error {
+	ctx := r.Context()
+	org, ctxErr := organizationFromCtx(ctx)
+	if ctxErr != nil {
+		return ctxErr
+	}
+
+	rawID := chi.URLParam(r, "id")
+	productID, parseErr := uuid.Parse(rawID)
+	if parseErr != nil {
+		return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid product id"))
+	}
+
+	row, fetchErr := h.store.GetProductByID(ctx, productID)
+	if fetchErr != nil {
+		if errors.Is(fetchErr, db.ErrNotFound) {
+			return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+		}
+		return fmt.Errorf("failed to fetch product: %w", fetchErr)
+	}
+	if row.OrganizationID != org.ID {
+		return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+	}
+
+	organizationID := row.OrganizationID
+	categoryID := row.CategoryID
+	name := row.Name
+	slug := row.Slug
+	status := row.Status
+	isFeatured := row.IsFeatured
+	description := row.Description
+	specification := row.Specification
+	createdAt := row.CreatedAt
+	updatedAt := row.UpdatedAt
+
+	variants, err := h.store.ListProductVariantsByProductID(ctx, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch variants: %w", err)
+	}
+
+	assets, err := h.store.ListProductAssetsByProductID(ctx, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch assets: %w", err)
+	}
+
+	attrs, err := h.store.ListVariantAttributesByProduct(ctx, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch attributes: %w", err)
+	}
+
+	urlMap := h.resolveAssetURLsParallel(ctx, assets)
+
+	attrMap := make(map[uuid.UUID][]AttributeResponse, len(attrs))
+	for _, a := range attrs {
+		attrMap[a.ProductVariantID] = append(attrMap[a.ProductVariantID], AttributeResponse{
+			AttributeID:         a.AttributeID,
+			AttributeName:       a.AttributeName,
+			AttributeSlug:       a.AttributeSlug,
+			AttributeValueID:    a.AttributeValueID,
+			AttributeValue:      a.AttributeValue,
+			AttributeValueLabel: a.AttributeValueLabel,
+		})
+	}
+
+	var productAssets []AssetResponse
+	variantAssetMap := make(map[uuid.UUID]AssetResponse, len(assets))
+	for _, a := range assets {
+		resp := AssetResponse{
+			ID:              a.ID,
+			URL:             urlMap[a.AssetKey],
+			Type:            a.Type,
+			MimeType:        a.MimeType,
+			AltText:         a.AltText,
+			SortOrder:       a.SortOrder,
+			IsPrimary:       a.IsPrimary,
+			DurationSeconds: a.DurationSeconds,
+		}
+		if a.ProductVariantID == nil {
+			productAssets = append(productAssets, resp)
+		} else {
+			variantAssetMap[*a.ProductVariantID] = resp
+		}
+	}
+
+	var variantResponses []VariantResponse
+	for _, v := range variants {
+		var variantAsset *AssetResponse
+		if va, exists := variantAssetMap[v.ID]; exists {
+			variantAsset = &va
+		}
+		variantResponses = append(variantResponses, VariantResponse{
+			ID:             v.ID,
+			Sku:            v.Sku,
+			Name:           v.Name,
+			Price:          v.Price,
+			TrackInventory: v.TrackInventory,
+			IsActive:       v.IsActive,
+			Attributes:     attrMap[v.ID],
+			Asset:          variantAsset,
+		})
+	}
+
+	res := ProductDetailsResponse{
+		ID:             productID,
+		OrganizationID: organizationID,
+		CategoryID:     categoryID,
+		Name:           name,
+		Slug:           slug,
+		Description:    json.RawMessage(description),
+		Status:         status,
+		Specification:  json.RawMessage(specification),
+		IsFeatured:     isFeatured,
+		CreatedAt:      createdAt,
+		UpdatedAt:      updatedAt,
+		Assets:         productAssets,
+		Variants:       variantResponses,
+	}
+
+	return WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *V1Handler) resolveAssetOrToken(
+	ctx context.Context,
+	token string,
+	organizationID uuid.UUID,
+	existingAssetsByKey map[string]db.ProductAsset,
+) (PendingUpload, error) {
+	// Final asset keys are only accepted when they already belong to this product.
+	// New assets must flow through pre-upload so MIME validation, media processing,
+	// and org ownership checks are applied before product update.
+	if strings.HasPrefix(token, "assets/"+organizationID.String()+"/") {
+		asset, ok := existingAssetsByKey[token]
+		if !ok {
+			return PendingUpload{}, apierror.NewAPIError(
+				http.StatusBadRequest,
+				fmt.Errorf("invalid or expired asset token: %s", token),
+			)
+		}
+
+		var durationSeconds float64
+		if asset.DurationSeconds != nil {
+			durationSeconds = float64(*asset.DurationSeconds)
+		}
+
+		return PendingUpload{
+			Token:           token,
+			TempKey:         "",
+			FinalKey:        token,
+			Type:            asset.Type,
+			ContentType:     asset.MimeType,
+			OriginalName:    "",
+			OrganizationID:  organizationID,
+			DurationSeconds: durationSeconds,
+		}, nil
+	}
+	// Otherwise resolve as temporary pre-upload token.
+	return h.resolvePendingUpload(ctx, token, organizationID)
+}
+
+//nolint:gocognit,funlen
+func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	var committed bool
+	organization, ctxErr := organizationFromCtx(ctx)
+	if ctxErr != nil {
+		return ctxErr
+	}
+
+	rawID := chi.URLParam(r, "id")
+	productID, parseErr := uuid.Parse(rawID)
+	if parseErr != nil {
+		return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid product id"))
+	}
+
+	// Verify existence and ownership before any asset fetching or S3 work.
+	currentProduct, fetchErr := h.store.GetProductByID(ctx, productID)
+	if fetchErr != nil {
+		if errors.Is(fetchErr, db.ErrNotFound) {
+			return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+		}
+		return fmt.Errorf("failed to load current product: %w", fetchErr)
+	}
+	if currentProduct.OrganizationID != organization.ID {
+		return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+	}
+
+	// Read and decode body (Max 1MB)
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	body, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		return apierror.NewAPIError(
+			http.StatusRequestEntityTooLarge,
+			errors.New("request body too large"),
+		)
+	}
+
+	var req CreateProductRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return apierror.ErrInvalidJSON()
+	}
+	if err := h.validate(&req); err != nil {
+		return apierror.ErrValidation(err)
+	}
+
+	// Retrieve existing assets so we can validate final-key reuse and identify
+	// orphaned S3 objects to delete after the transaction succeeds.
+	existingAssets, err := h.store.ListProductAssetsByProductID(ctx, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch product assets: %w", err)
+	}
+	existingAssetsByKey := make(map[string]db.ProductAsset, len(existingAssets))
+	for _, asset := range existingAssets {
+		existingAssetsByKey[asset.AssetKey] = asset
+	}
+
+	tokens, err := collectAssetTokens(&req)
+	if err != nil {
+		return err
+	}
+
+	// Resolve each token/key.
+	resolvedAssets := make(map[string]PendingUpload, len(tokens))
+	for _, token := range tokens {
+		pending, resolveErr := h.resolveAssetOrToken(ctx, token, organization.ID, existingAssetsByKey)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		resolvedAssets[token] = pending
+	}
+
+	// Copy temp objects to final locations in parallel; track for rollback.
+	var (
+		copiedMu   sync.Mutex
+		copiedKeys = make([]string, 0, len(resolvedAssets))
+	)
+
+	defer func() {
+		if committed {
+			return
+		}
+		copiedMu.Lock()
+		keys := append([]string(nil), copiedKeys...)
+		copiedMu.Unlock()
+		if len(keys) == 0 {
+			return
+		}
+
+		//nolint:mnd // timeout duration
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		for _, destKey := range keys {
+			if delErr := h.storage.DeleteObject(cleanupCtx, *h.bucket, destKey); delErr != nil {
+				h.logger.WarnContext(
+					cleanupCtx, "failed to roll back final S3 object during update rollback",
+					slog.String("key", destKey),
+					slog.Any("err", delErr),
+				)
+			}
+		}
+	}()
+
+	g, gCtx := errgroup.WithContext(ctx)
+	for _, pending := range resolvedAssets {
+		if pending.TempKey == "" {
+			continue // Already in final location
+		}
+		g.Go(func() error {
+			if copyErr := h.storage.CopyObject(
+				gCtx,
+				*h.bucket,
+				pending.TempKey,
+				pending.FinalKey,
+			); copyErr != nil {
+				return fmt.Errorf(
+					"failed to copy %s to final location: %w",
+					pending.TempKey,
+					copyErr,
+				)
+			}
+			copiedMu.Lock()
+			copiedKeys = append(copiedKeys, pending.FinalKey)
+			copiedMu.Unlock()
+			return nil
+		})
+	}
+	if waitErr := g.Wait(); waitErr != nil {
+		return waitErr
+	}
+
+	// Build transaction params.
+	txAssets := make([]db.ProductAssetParams, len(req.Assets))
+	for i, assetReq := range req.Assets {
+		txAssets[i] = buildAssetParams(assetReq, resolvedAssets[assetReq.Token])
+	}
+
+	txVariants := make([]db.ProductVariantParams, len(req.Variants))
+	for i, variantReq := range req.Variants {
+		var txAsset *db.ProductAssetParams
+		if variantReq.Asset != nil {
+			params := buildAssetParams(*variantReq.Asset, resolvedAssets[variantReq.Asset.Token])
+			txAsset = &params
+		}
+		txVariants[i] = db.ProductVariantParams{
+			Sku:               variantReq.Sku,
+			Name:              variantReq.Name,
+			Price:             variantReq.Price,
+			AttributeValueIDs: variantReq.AttributeValueIDs,
+			Asset:             txAsset,
+		}
+	}
+
+	txParams := db.UpdateProductTxParams{
+		ProductID:      productID,
+		OrganizationID: organization.ID,
+		CategoryID:     req.CategoryID,
+		Name:           req.Name,
+		Slug:           req.Slug,
+		Description:    req.Description,
+		Specification:  req.Specification,
+		Status:         currentProduct.Status,
+		IsFeatured:     currentProduct.IsFeatured,
+		Variants:       txVariants,
+		Assets:         txAssets,
+	}
+
+	// Run update transaction.
+	result, err := h.store.UpdateProductTx(ctx, txParams)
+	if err != nil {
+		if apiErr, ok := productTxAPIError(err); ok {
+			return apiErr
+		}
+		return fmt.Errorf("failed to update product details: %w", err)
+	}
+	committed = true
+
+	// Post-success S3/Redis cleanup.
+	for _, pending := range resolvedAssets {
+		if pending.TempKey != "" {
+			go h.cleanupCommittedUpload(ctx, pending.TempKey, pending.Token)
+		}
+	}
+
+	// Identify and delete S3 assets that are no longer used by the product.
+	usedAssetKeys := make(map[string]struct{})
+	for _, asset := range result.ProductAssets {
+		usedAssetKeys[asset.AssetKey] = struct{}{}
+	}
+	for _, asset := range existingAssets {
+		if _, used := usedAssetKeys[asset.AssetKey]; !used {
+			go func(key string) {
+				//nolint:mnd // timeout duration
+				cleanupCtx, cancel := context.WithTimeout(
+					context.WithoutCancel(ctx),
+					10*time.Second,
+				)
+				defer cancel()
+				_ = h.storage.DeleteObject(cleanupCtx, *h.bucket, key)
+			}(asset.AssetKey)
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *V1Handler) DeleteProduct(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	organization, ctxErr := organizationFromCtx(ctx)
+	if ctxErr != nil {
+		return ctxErr
+	}
+
+	rawID := chi.URLParam(r, "id")
+	productID, parseErr := uuid.Parse(rawID)
+	if parseErr != nil {
+		return apierror.NewAPIError(http.StatusBadRequest, errors.New("invalid product id"))
+	}
+
+	// Verify existence and ownership
+	product, fetchErr := h.store.GetProductByID(ctx, productID)
+	if fetchErr != nil {
+		if errors.Is(fetchErr, db.ErrNotFound) {
+			return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+		}
+		return fmt.Errorf("failed to fetch product: %w", fetchErr)
+	}
+
+	if product.OrganizationID != organization.ID {
+		return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
+	}
+
+	// Fetch assets for S3 cleanup before DB delete cascades them.
+	assets, err := h.store.ListProductAssetsByProductID(ctx, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch product assets before deletion: %w", err)
+	}
+
+	// Perform DB delete (cascades to variants, assets, variant_attributes).
+	err = h.store.DeleteProduct(ctx, db.DeleteProductParams{
+		ID:             productID,
+		OrganizationID: organization.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete product: %w", err)
+	}
+
+	// Clean up S3 assets in background goroutine.
+	if len(assets) > 0 {
+		go func() {
+			//nolint:mnd // timeout duration
+			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			defer cancel()
+			for _, asset := range assets {
+				if delErr := h.storage.DeleteObject(
+					cleanupCtx,
+					*h.bucket,
+					asset.AssetKey,
+				); delErr != nil {
+					h.logger.WarnContext(
+						cleanupCtx, "failed to delete asset from S3 on product deletion",
+						slog.String("key", asset.AssetKey),
+						slog.Any("err", delErr),
+					)
+				}
+			}
+		}()
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
