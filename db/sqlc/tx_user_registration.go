@@ -38,7 +38,7 @@ func (store *SQLStore) PlatformUserRegistrationTx(
 			return ErrMismatchOrganizationType
 		}
 
-		results.Identity, err = store.CreateIdentity(ctx, UserIdentity)
+		results.Identity, err = q.CreateIdentity(ctx, UserIdentity)
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func (store *SQLStore) PlatformUserRegistrationTx(
 			return err
 		}
 
-		results.Member, err = store.CreateMember(ctx, CreateMemberParams{
+		results.Member, err = q.CreateMember(ctx, CreateMemberParams{
 			OrganizationID: arg.OrganizationID,
 			IdentityID:     results.Identity.ID,
 		})
@@ -65,7 +65,7 @@ func (store *SQLStore) PlatformUserRegistrationTx(
 			return err
 		}
 
-		err = store.AssignRoleToMember(ctx, AssignRoleToMemberParams{
+		err = q.AssignRoleToMember(ctx, AssignRoleToMemberParams{
 			MemberID:   results.Member.ID,
 			RoleID:     arg.RoleID,
 			AssignedBy: arg.RoleAssignBy,
@@ -99,7 +99,7 @@ func (store *SQLStore) UserRegistrationTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		results.Identity, err = store.CreateIdentity(ctx, UserIdentity)
+		results.Identity, err = q.CreateIdentity(ctx, UserIdentity)
 		if err != nil {
 			return err
 		}
