@@ -29,6 +29,10 @@ type Store interface {
 		context.Context,
 		CreateProductTxParams,
 	) (CreateProductTxResults, error)
+	UpdateProductTx(
+		context.Context,
+		UpdateProductTxParams,
+	) (CreateProductTxResults, error)
 }
 
 type SQLStore struct {

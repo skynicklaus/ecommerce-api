@@ -159,3 +159,166 @@ func buildCreateProductAssetParams(
 		DurationSeconds:  arg.DurationSeconds,
 	}
 }
+
+type UpdateProductTxParams struct {
+	ProductID      uuid.UUID
+	OrganizationID uuid.UUID
+	CategoryID     uuid.UUID
+	Name           string
+	Slug           string
+	Description    []byte
+	Specification  []byte
+	Status         string
+	IsFeatured     bool
+	Variants       []ProductVariantParams
+	Assets         []ProductAssetParams
+}
+
+// UpdateProductTx updates an existing product, updates/creates/deletes its variants, and updates its assets.
+func (store *SQLStore) UpdateProductTx(
+	ctx context.Context,
+	arg UpdateProductTxParams,
+) (CreateProductTxResults, error) {
+	var results CreateProductTxResults
+
+	err := store.execTx(ctx, func(q *Queries) error {
+		var err error
+
+		// 1. Update the product metadata.
+		results.Product, err = q.UpdateProduct(ctx, UpdateProductParams{
+			ID:             arg.ProductID,
+			OrganizationID: arg.OrganizationID,
+			CategoryID:     arg.CategoryID,
+			Name:           arg.Name,
+			Slug:           arg.Slug,
+			Description:    arg.Description,
+			Specification:  arg.Specification,
+			Status:         arg.Status,
+			IsFeatured:     arg.IsFeatured,
+		})
+		if err != nil {
+			return err
+		}
+
+		// 2. Fetch existing variants of the product.
+		existingVariants, err := q.ListProductVariantsByProductID(ctx, arg.ProductID)
+		if err != nil {
+			return err
+		}
+
+		// 3. Map existing variants by SKU.
+		existingVariantsMap := make(map[string]ProductVariant, len(existingVariants))
+		for _, v := range existingVariants {
+			existingVariantsMap[v.Sku] = v
+		}
+
+		retainedSKUs := make(map[string]struct{}, len(arg.Variants))
+		variantMapByID := make(map[string]uuid.UUID)
+
+		// 4. Update or Create variants.
+		for _, variantArg := range arg.Variants {
+			var productVariant ProductVariant
+			var variantErr error
+
+			if existing, exists := existingVariantsMap[variantArg.Sku]; exists {
+				// Update existing variant.
+				productVariant, variantErr = q.UpdateProductVariant(ctx, UpdateProductVariantParams{
+					ID:             existing.ID,
+					OrganizationID: arg.OrganizationID,
+					Name:           variantArg.Name,
+					Price:          variantArg.Price,
+				})
+				if variantErr != nil {
+					return variantErr
+				}
+
+				// Wipe existing attributes of the variant.
+				if err = q.DeleteVariantAttributes(ctx, productVariant.ID); err != nil {
+					return err
+				}
+			} else {
+				// Create new variant.
+				productVariant, variantErr = q.CreateProductVariant(
+					ctx,
+					buildCreateProductVariantParams(
+						arg.OrganizationID,
+						results.Product.ID,
+						variantArg,
+					),
+				)
+				if variantErr != nil {
+					return variantErr
+				}
+			}
+
+			// Assign attributes.
+			for _, attrValueID := range variantArg.AttributeValueIDs {
+				if err = q.AssignAttributeValueToProductVariant(
+					ctx,
+					AssignAttributeValueToProductVariantParams{
+						ProductVariantID: productVariant.ID,
+						AttributeValueID: attrValueID,
+					},
+				); err != nil {
+					return err
+				}
+			}
+
+			results.ProductVariants = append(results.ProductVariants, productVariant)
+			retainedSKUs[variantArg.Sku] = struct{}{}
+			variantMapByID[variantArg.Sku] = productVariant.ID
+		}
+
+		// 5. Delete variants not in incoming request.
+		for sku, existing := range existingVariantsMap {
+			if _, retained := retainedSKUs[sku]; !retained {
+				if err = q.DeleteProductVariant(ctx, DeleteProductVariantParams{
+					ID:             existing.ID,
+					OrganizationID: arg.OrganizationID,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+
+		// 6. Delete all existing assets for the product (cascades or is hard-deleted).
+		if err = q.DeleteProductAssetsByProductID(ctx, results.Product.ID); err != nil {
+			return err
+		}
+
+		// 7. Insert new product assets.
+		for _, asset := range arg.Assets {
+			createdAsset, assetErr := q.CreateProductAsset(
+				ctx,
+				buildCreateProductAssetParams(asset, results.Product.ID, nil),
+			)
+			if assetErr != nil {
+				return assetErr
+			}
+			results.ProductAssets = append(results.ProductAssets, createdAsset)
+		}
+
+		// 8. Insert variant assets.
+		for _, variantArg := range arg.Variants {
+			if variantArg.Asset != nil {
+				variantID := variantMapByID[variantArg.Sku]
+				createdAsset, assetErr := q.CreateProductAsset(
+					ctx,
+					buildCreateProductAssetParams(
+						*variantArg.Asset,
+						results.Product.ID,
+						&variantID,
+					),
+				)
+				if assetErr != nil {
+					return assetErr
+				}
+				results.ProductAssets = append(results.ProductAssets, createdAsset)
+			}
+		}
+
+		return nil
+	})
+
+	return results, err
+}
