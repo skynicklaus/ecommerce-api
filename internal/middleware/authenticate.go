@@ -160,19 +160,20 @@ func (m *Middleware) RequireService(
 						projected = absoluteCeiling
 					}
 					responseExpiry = projected
-					go func() {
-						renewCtx, cancel := context.WithTimeout(
-							context.WithoutCancel(ctx),
-							renewalTimeout,
-						)
-						defer cancel()
-						_, _, _ = m.renewalG.Do(tokenHash, func() (any, error) {
-							return nil, m.store.RenewSession(renewCtx, db.RenewSessionParams{
+					if m.beginSessionRenewal(tokenHash) {
+						go func() {
+							defer m.finishSessionRenewal(tokenHash)
+							renewCtx, cancel := context.WithTimeout(
+								context.WithoutCancel(ctx),
+								renewalTimeout,
+							)
+							defer cancel()
+							_ = m.store.RenewSession(renewCtx, db.RenewSessionParams{
 								Token:     tokenHash,
 								ExpiresAt: projected,
 							})
-						})
-					}()
+						}()
+					}
 				}
 			}
 			w.Header().Set("X-Session-Expires-At", responseExpiry.UTC().Format(time.RFC3339))

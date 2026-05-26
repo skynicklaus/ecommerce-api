@@ -341,7 +341,7 @@ func TestRequireService(t *testing.T) {
 		require.Eventually(t, func() bool {
 			return atomic.LoadInt32(&renewalCount) == 1
 		}, time.Second, 10*time.Millisecond)
-		require.Equal(t, int32(1), atomic.LoadInt32(&renewalCount), "concurrent renewal calls should be singleflight-deduplicated to 1 call")
+		require.Equal(t, int32(1), atomic.LoadInt32(&renewalCount), "concurrent renewal calls should be debounced to 1 call")
 	})
 
 	t.Run("absolute session ceiling enforced", func(t *testing.T) {
