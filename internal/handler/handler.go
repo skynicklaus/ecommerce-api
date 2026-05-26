@@ -58,7 +58,7 @@ type V1Handler struct {
 	store         db.Store
 	logger        *util.ServerLogger
 	validator     *validator.Validate
-	cache         *cache.RedisClient
+	cache         *cache.Client
 	storage       *storage.S3Storage
 	mime          *allowed.MimeList
 	storageRegion *string
@@ -71,7 +71,7 @@ type V1Handler struct {
 func NewV1Handler(
 	store db.Store,
 	logger *util.ServerLogger,
-	cache *cache.RedisClient,
+	cache *cache.Client,
 	storage *storage.S3Storage,
 ) Handler {
 	storageRegion := os.Getenv("AWS_REGION")

@@ -9,11 +9,11 @@ import (
 
 type Middleware struct {
 	store    db.Store
-	cache    *cache.RedisClient
+	cache    *cache.Client
 	renewalG singleflight.Group
 }
 
-func New(store db.Store, cache *cache.RedisClient) *Middleware {
+func New(store db.Store, cache *cache.Client) *Middleware {
 	return &Middleware{
 		store:    store,
 		cache:    cache,

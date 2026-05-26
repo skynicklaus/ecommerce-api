@@ -58,7 +58,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
 
-	redisClient := cache.NewRedis(store, logger)
+	redisClient := cache.New(store, logger)
 	defer redisClient.Close()
 
 	s3Storage, err := storage.New(ctx)
@@ -158,7 +158,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 			CategoryID:    category.ID,
 			Description:   json.RawMessage(`{"text": "E2E product description detail"}`),
 			Specification: json.RawMessage(`{"weight": "1.5kg"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     token,
 					IsPrimary: true,
@@ -291,7 +291,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 			CategoryID:    uuid.New(), // Random UUID (causes foreign key constraint violation)
 			Description:   json.RawMessage(`{"text": "Rollback description"}`),
 			Specification: json.RawMessage(`{"weight": "1.0kg"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     token,
 					IsPrimary: true,
@@ -378,7 +378,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 			CategoryID:    category.ID,
 			Description:   json.RawMessage(`{"text": "idem"}`),
 			Specification: json.RawMessage(`{"idem": "yes"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     token,
 					IsPrimary: true,
@@ -650,7 +650,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
-	redisClient := cache.NewRedis(store, logger)
+	redisClient := cache.New(store, logger)
 	defer redisClient.Close()
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)
@@ -1079,7 +1079,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 			CategoryID:    category.ID,
 			Description:   json.RawMessage(`{"text":"video reuse updated"}`),
 			Specification: json.RawMessage(`{"weight":"1kg"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     videoKey,
 					SortOrder: 1,
@@ -1154,7 +1154,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 			CategoryID:    category.ID,
 			Description:   json.RawMessage(`{"text":"unknown final asset updated"}`),
 			Specification: json.RawMessage(`{"weight":"1kg"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     unknownFinalKey,
 					IsPrimary: true,
@@ -1272,7 +1272,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 			CategoryID:    category.ID,
 			Description:   json.RawMessage(`{"text":"asset replace updated"}`),
 			Specification: json.RawMessage(`{"weight":"1kg"}`),
-			Assets: []ProductAssetReq{
+			Assets: []ProductAssetRequest{
 				{
 					Token:     newToken,
 					IsPrimary: true,

@@ -42,7 +42,7 @@ func TestManagementHandlers_Integration(t *testing.T) {
 
 	store := db.NewStore(connPool)
 	logger := util.NewLogger()
-	redisClient := cache.NewRedis(store, logger)
+	redisClient := cache.New(store, logger)
 	defer redisClient.Close()
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)

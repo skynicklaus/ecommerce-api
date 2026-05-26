@@ -24,7 +24,7 @@ func IdempotencyLockKey(organizationID uuid.UUID, idempotencyKey string) string 
 	return idempotencyLockPrefix + organizationID.String() + ":" + idempotencyKey
 }
 
-func (c *RedisClient) GetIdempotentProductResult(
+func (c *Client) GetIdempotentProductResult(
 	ctx context.Context,
 	organizationID uuid.UUID,
 	idempotencyKey string,
@@ -32,7 +32,7 @@ func (c *RedisClient) GetIdempotentProductResult(
 	return c.Get(ctx, IdempotencyResultKey(organizationID, idempotencyKey)).Bytes()
 }
 
-func (c *RedisClient) CacheIdempotentProductResult(
+func (c *Client) CacheIdempotentProductResult(
 	ctx context.Context,
 	organizationID uuid.UUID,
 	idempotencyKey string,
@@ -42,7 +42,7 @@ func (c *RedisClient) CacheIdempotentProductResult(
 	return c.Set(ctx, IdempotencyResultKey(organizationID, idempotencyKey), value, ttl).Err()
 }
 
-func (c *RedisClient) AcquireIdempotencyLock(
+func (c *Client) AcquireIdempotencyLock(
 	ctx context.Context,
 	organizationID uuid.UUID,
 	idempotencyKey string,
@@ -51,7 +51,7 @@ func (c *RedisClient) AcquireIdempotencyLock(
 	return c.SetNX(ctx, IdempotencyLockKey(organizationID, idempotencyKey), "1", ttl).Result()
 }
 
-func (c *RedisClient) ReleaseIdempotencyLock(
+func (c *Client) ReleaseIdempotencyLock(
 	ctx context.Context,
 	organizationID uuid.UUID,
 	idempotencyKey string,

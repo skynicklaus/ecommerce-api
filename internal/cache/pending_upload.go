@@ -10,7 +10,7 @@ const (
 	maxPendingUploadTTL   = 12 * time.Hour
 )
 
-func (c *RedisClient) CachePendingUpload(
+func (c *Client) CachePendingUpload(
 	ctx context.Context,
 	token string,
 	data []byte,
@@ -21,7 +21,7 @@ func (c *RedisClient) CachePendingUpload(
 	return err
 }
 
-func (c *RedisClient) GetPendingUpload(
+func (c *Client) GetPendingUpload(
 	ctx context.Context,
 	token string,
 ) ([]byte, error) {
@@ -29,7 +29,7 @@ func (c *RedisClient) GetPendingUpload(
 	return c.Get(ctx, key).Bytes()
 }
 
-func (c *RedisClient) DeletePendingUpload(
+func (c *Client) DeletePendingUpload(
 	ctx context.Context,
 	token string,
 ) error {

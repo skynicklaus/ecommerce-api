@@ -26,7 +26,7 @@ type Server struct {
 	port    int
 	logger  *util.ServerLogger
 	store   db.Store
-	redis   *cache.RedisClient
+	redis   *cache.Client
 	storage *storage.S3Storage
 }
 
@@ -36,7 +36,7 @@ func NewServer(store db.Store, logger *util.ServerLogger) *http.Server {
 		port = 8080
 	}
 
-	redis := cache.NewRedis(store, logger)
+	redis := cache.New(store, logger)
 
 	storage, err := storage.New(context.Background())
 	if err != nil {

@@ -186,7 +186,7 @@ func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *htt
 func registerNewCustomer(
 	ctx context.Context,
 	store db.Store,
-	cache *cache.RedisClient,
+	cache *cache.Client,
 	req *UserCredentialRegistrationRequest,
 	hashedPassword string,
 ) (db.CustomerRegistrationTxResults, error) {

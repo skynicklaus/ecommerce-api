@@ -13,7 +13,7 @@ import (
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
-type RedisClient struct {
+type Client struct {
 	*redis.Client
 
 	store  db.Store
@@ -23,7 +23,7 @@ type RedisClient struct {
 	roleMap map[string]db.Role
 }
 
-func NewRedis(store db.Store, logger *util.ServerLogger) *RedisClient {
+func New(store db.Store, logger *util.ServerLogger) *Client {
 	redisURL, exists := os.LookupEnv("REDIS_URL")
 
 	var redisClient *redis.Client
@@ -61,7 +61,7 @@ func NewRedis(store db.Store, logger *util.ServerLogger) *RedisClient {
 		logger.Fatal("error connecting to redis", slog.Any("err", err))
 	}
 
-	return &RedisClient{
+	return &Client{
 		Client:  redisClient,
 		store:   store,
 		logger:  logger,

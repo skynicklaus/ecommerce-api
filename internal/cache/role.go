@@ -20,7 +20,7 @@ const (
 	RoleCacheDuation              = 15 * time.Minute
 )
 
-func (c *RedisClient) getRoleFromCacheOrDB(
+func (c *Client) getRoleFromCacheOrDB(
 	ctx context.Context,
 	orgType string,
 	slug string,
@@ -60,28 +60,28 @@ func (c *RedisClient) getRoleFromCacheOrDB(
 	return db.Role{}, ErrRoleNotFound
 }
 
-func (c *RedisClient) GetSystemPlatformRoleFromSlug(
+func (c *Client) GetSystemPlatformRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
 	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypePlatform), slug)
 }
 
-func (c *RedisClient) GetSystemMerchantRoleFromSlug(
+func (c *Client) GetSystemMerchantRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
 	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypeMerchant), slug)
 }
 
-func (c *RedisClient) GetSystemIndividualRoleFromSlug(
+func (c *Client) GetSystemIndividualRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {
 	return c.getRoleFromCacheOrDB(ctx, string(util.OrganizationTypeIndividual), slug)
 }
 
-func (c *RedisClient) GetSystemCompanyRoleFromSlug(
+func (c *Client) GetSystemCompanyRoleFromSlug(
 	ctx context.Context,
 	slug string,
 ) (db.Role, error) {

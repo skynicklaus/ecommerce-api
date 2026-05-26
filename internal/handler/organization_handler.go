@@ -72,7 +72,7 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 
 func getRoleFromSlug(
 	ctx context.Context,
-	cache *cache.RedisClient,
+	cache *cache.Client,
 	organizationType string,
 	slug string,
 ) (db.Role, error) {

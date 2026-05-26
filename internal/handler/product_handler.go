@@ -28,7 +28,7 @@ import (
 	"github.com/skynicklaus/ecommerce-api/util"
 )
 
-type ProductAssetReq struct {
+type ProductAssetRequest struct {
 	Token     string  `json:"token"             validate:"required"`
 	IsPrimary bool    `json:"isPrimary"`
 	AltText   *string `json:"altText,omitempty"`
@@ -36,21 +36,21 @@ type ProductAssetReq struct {
 }
 
 type VariantRequest struct {
-	Sku               string           `json:"sku"               validate:"required"`
-	Name              string           `json:"name"              validate:"required"`
-	Price             decimal.Decimal  `json:"price"             validate:"required"`
-	AttributeValueIDs []int64          `json:"attributeValueIds" validate:"required"`
-	Asset             *ProductAssetReq `json:"asset,omitempty"`
+	Sku               string               `json:"sku"               validate:"required"`
+	Name              string               `json:"name"              validate:"required"`
+	Price             decimal.Decimal      `json:"price"             validate:"required"`
+	AttributeValueIDs []int64              `json:"attributeValueIds" validate:"required"`
+	Asset             *ProductAssetRequest `json:"asset,omitempty"`
 }
 
 type CreateProductRequest struct {
-	Name          string            `json:"name"          validate:"required"`
-	Slug          string            `json:"slug"          validate:"required"`
-	CategoryID    uuid.UUID         `json:"categoryId"    validate:"required"`
-	Description   json.RawMessage   `json:"description"   validate:"required"`
-	Specification json.RawMessage   `json:"specification" validate:"required"`
-	Assets        []ProductAssetReq `json:"assets"`
-	Variants      []VariantRequest  `json:"variants"      validate:"required,min=1,dive"`
+	Name          string                `json:"name"          validate:"required"`
+	Slug          string                `json:"slug"          validate:"required"`
+	CategoryID    uuid.UUID             `json:"categoryId"    validate:"required"`
+	Description   json.RawMessage       `json:"description"   validate:"required"`
+	Specification json.RawMessage       `json:"specification" validate:"required"`
+	Assets        []ProductAssetRequest `json:"assets"`
+	Variants      []VariantRequest      `json:"variants"      validate:"required,min=1,dive"`
 }
 
 func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // idempotency + S3 copies + DB tx
@@ -350,7 +350,7 @@ func collectAssetTokens(req *CreateProductRequest) ([]string, error) {
 	return tokens, nil
 }
 
-func buildAssetParams(req ProductAssetReq, pending PendingUpload) db.ProductAssetParams {
+func buildAssetParams(req ProductAssetRequest, pending PendingUpload) db.ProductAssetParams {
 	var duration *int16
 	if pending.Type == string(util.ProductAssetVideo) && pending.DurationSeconds > 0 {
 		d := int16(math.Round(pending.DurationSeconds))
