@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:18
     container_name: ecommerce-db
+    network_mode: host
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -11,8 +12,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
       - ./postgres/init:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
   dragonflydb:
     image: docker.dragonflydb.io/dragonflydb/dragonfly
     container_name: ecomerce-cache
@@ -24,6 +23,7 @@ services:
   garage:
     image: dxflrs/garage:v2.3.0
     container_name: ecommerce-storage
+    network_mode: host
     command: /garage server --single-node --default-bucket
     environment:
       GARAGE_DEFAULT_ACCESS_KEY: ${AWS_ACCESS_KEY_ID}
@@ -32,16 +32,10 @@ services:
     volumes:
       - ./garage/garage.toml:/etc/garage.toml
       - ./garage/data:/var/lib/garage
-    ports:
-      - "3900:3900"
-      - "3901:3901"
-      - "3902:3902"
-      - "3903:3903"
   imgproxy:
     image: ghcr.io/imgproxy/imgproxy:v3.31.2
     container_name: ecommerce-imgproxy
-    ports:
-      - "8081:8080"
+    network_mode: host
     environment:
       IMGPROXY_USE_S3: true
       IMGPROXY_ENDPOINT: http://garage:3900
@@ -51,7 +45,6 @@ services:
       AWS_S3_ENDPOINT_USE_PATH_STYLE: true
       IMGPROXY_KEY: ${IMGPROXY_KEY}
       IMGPROXY_SALT: ${IMGPROXY_SALT}
-
 volumes:
   postgres_data:
   dragonfly_data:
