@@ -3,6 +3,7 @@
 package db_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,6 +11,17 @@ import (
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
+
+func cleanupOrganization(t *testing.T, organizationID string) {
+	t.Helper()
+	t.Cleanup(func() {
+		_, _ = testPool.Exec(
+			context.Background(),
+			"DELETE FROM organizations WHERE id = $1",
+			organizationID,
+		)
+	})
+}
 
 func createRandomWarehouseWithOrg(t *testing.T, organization db.Organization) db.Warehouse {
 	t.Helper()
