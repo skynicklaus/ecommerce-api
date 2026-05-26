@@ -33,6 +33,14 @@ type Store interface {
 		context.Context,
 		UpdateProductTxParams,
 	) (CreateProductTxResults, error)
+	CreateWarehouseTx(
+		context.Context,
+		CreateWarehouseTxParams,
+	) (WarehouseTxResult, error)
+	UpdateWarehouseTx(
+		context.Context,
+		UpdateWarehouseTxParams,
+	) (WarehouseTxResult, error)
 }
 
 type SQLStore struct {
