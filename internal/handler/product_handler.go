@@ -443,8 +443,8 @@ func (h *V1Handler) UpdateProductStatus(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req UpdateProductStatusRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return apierror.ErrInvalidJSON()
+	if err := decodeJSON(w, r, &req); err != nil {
+		return err
 	}
 	if err := h.validate(&req); err != nil {
 		return apierror.ErrValidation(err)
@@ -1478,7 +1478,12 @@ func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error 
 	// Resolve each token/key.
 	resolvedAssets := make(map[string]PendingUpload, len(tokens))
 	for _, token := range tokens {
-		pending, resolveErr := h.resolveAssetOrToken(ctx, token, organization.ID, existingAssetsByKey)
+		pending, resolveErr := h.resolveAssetOrToken(
+			ctx,
+			token,
+			organization.ID,
+			existingAssetsByKey,
+		)
 		if resolveErr != nil {
 			return resolveErr
 		}
