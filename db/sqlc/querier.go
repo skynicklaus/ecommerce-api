@@ -50,6 +50,7 @@ type Querier interface {
 	GetCustomerHashedPassword(ctx context.Context, arg GetCustomerHashedPasswordParams) (*string, error)
 	GetCustomerWithCredential(ctx context.Context, email string) (GetCustomerWithCredentialRow, error)
 	GetIdentity(ctx context.Context, id uuid.UUID) (Identity, error)
+	GetInventoryByVariantAndWarehouseForOrganization(ctx context.Context, arg GetInventoryByVariantAndWarehouseForOrganizationParams) (GetInventoryByVariantAndWarehouseForOrganizationRow, error)
 	GetMemberByIdentityID(ctx context.Context, identityID uuid.UUID) (Member, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
@@ -65,8 +66,12 @@ type Querier interface {
 	GetUserByIdentityID(ctx context.Context, identityID uuid.UUID) (User, error)
 	GetUserHashedPassword(ctx context.Context, arg GetUserHashedPasswordParams) (*string, error)
 	GetUserWithCredential(ctx context.Context, email string) (GetUserWithCredentialRow, error)
+	GetWarehouseByIDAndOrganization(ctx context.Context, arg GetWarehouseByIDAndOrganizationParams) (GetWarehouseByIDAndOrganizationRow, error)
 	GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error)
 	ListActiveProductsAfter(ctx context.Context, arg ListActiveProductsAfterParams) ([]ListActiveProductsAfterRow, error)
+	ListInventoryByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListInventoryByOrganizationRow, error)
+	ListInventoryByProduct(ctx context.Context, arg ListInventoryByProductParams) ([]ListInventoryByProductRow, error)
+	ListInventoryByVariant(ctx context.Context, arg ListInventoryByVariantParams) ([]ListInventoryByVariantRow, error)
 	ListOrganizationRolesByType(ctx context.Context, arg ListOrganizationRolesByTypeParams) ([]Role, error)
 	ListProductAssetsByProductID(ctx context.Context, productID uuid.UUID) ([]ProductAsset, error)
 	ListProductAssetsByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ProductAsset, error)
@@ -77,12 +82,18 @@ type Querier interface {
 	ListSessionsByIdentity(ctx context.Context, arg ListSessionsByIdentityParams) ([]ListSessionsByIdentityRow, error)
 	ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error)
 	ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error)
+	ListWarehousesByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListWarehousesByOrganizationRow, error)
 	RenewSession(ctx context.Context, arg RenewSessionParams) error
+	UpdateAddressByIDAndOrganization(ctx context.Context, arg UpdateAddressByIDAndOrganizationParams) (Address, error)
 	UpdateCustomerAccount(ctx context.Context, arg UpdateCustomerAccountParams) (UpdateCustomerAccountRow, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductStatus(ctx context.Context, arg UpdateProductStatusParams) (UpdateProductStatusRow, error)
 	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error)
 	UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) (UpdateUserAccountRow, error)
+	UpdateWarehouse(ctx context.Context, arg UpdateWarehouseParams) (Warehouse, error)
+	// If either ID does not belong to the organization, the SELECT below returns no
+	// rows. sqlc maps that empty RETURNING result to ErrNotFound for the handler.
+	UpsertInventory(ctx context.Context, arg UpsertInventoryParams) (Inventory, error)
 }
 
 var _ Querier = (*Queries)(nil)
