@@ -47,7 +47,7 @@ func TestManagementHandlers_Integration(t *testing.T) {
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)
 
-	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
 
 	r := chi.NewRouter()
 	r.Post("/v1/users/merchant", makeTestHandler(h.UserCredentialRegistration))

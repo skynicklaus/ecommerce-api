@@ -65,7 +65,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Create the Handler instance
-	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
 
 	// Override config params to ensure local development targets are fully matched
 	h.bucket = &bucketName
@@ -655,7 +655,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)
 
-	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
 	h.bucket = &bucketName
 
 	currentYearMonth := time.Now().Format("2006/01")

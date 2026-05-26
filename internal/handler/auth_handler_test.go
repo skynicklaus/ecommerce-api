@@ -52,7 +52,7 @@ func TestAuthFlows_Integration(t *testing.T) {
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)
 
-	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
 	midware := middleware.New(store, redisClient)
 
 	// Create test Chi router
@@ -408,7 +408,7 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 	s3Storage, err := storage.New(ctx)
 	require.NoError(t, err)
 
-	h := NewV1Handler(store, logger, redisClient, s3Storage).(*V1Handler)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
 	midware := middleware.New(store, redisClient)
 
 	r := chi.NewRouter()

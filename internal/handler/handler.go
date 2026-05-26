@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"net/http"
 	"os"
 
 	"github.com/go-playground/validator/v10"
@@ -14,45 +13,6 @@ import (
 	"github.com/skynicklaus/ecommerce-api/internal/validation"
 	"github.com/skynicklaus/ecommerce-api/util"
 )
-
-type Handler interface {
-	// Organization
-	CreateOrganization(http.ResponseWriter, *http.Request) error
-
-	// Product — storefront (public)
-	GetActiveProductDetails(http.ResponseWriter, *http.Request) error
-	ListActiveProducts(http.ResponseWriter, *http.Request) error
-
-	// Product — merchant catalog (authenticated)
-	CreateProduct(http.ResponseWriter, *http.Request) error
-	UpdateProductStatus(http.ResponseWriter, *http.Request) error
-	UpdateProduct(http.ResponseWriter, *http.Request) error
-	DeleteProduct(http.ResponseWriter, *http.Request) error
-	ListMerchantProducts(http.ResponseWriter, *http.Request) error
-	GetMerchantProductDetails(http.ResponseWriter, *http.Request) error
-
-	// Product Asset
-	PreUploadAssets(http.ResponseWriter, *http.Request) error
-
-	// Registration
-	UserCredentialRegistration(http.ResponseWriter, *http.Request) error
-	PlatformUserCredentialRegistration(http.ResponseWriter, *http.Request) error
-	CustomerCredentialRegistration(http.ResponseWriter, *http.Request) error
-
-	// Auth
-	LoginCustomer(http.ResponseWriter, *http.Request) error
-	LoginMerchant(http.ResponseWriter, *http.Request) error
-	LoginAdmin(http.ResponseWriter, *http.Request) error
-	Logout(http.ResponseWriter, *http.Request) error
-	GetMe(http.ResponseWriter, *http.Request) error
-
-	// Sessions
-	ListActiveSessions(http.ResponseWriter, *http.Request) error
-	RevokeOtherSessions(http.ResponseWriter, *http.Request) error
-	RevokeSessionByID(http.ResponseWriter, *http.Request) error
-
-	validate(req any) error
-}
 
 type V1Handler struct {
 	store         db.Store
@@ -73,7 +33,7 @@ func NewV1Handler(
 	logger *util.ServerLogger,
 	cache *cache.Client,
 	storage *storage.S3Storage,
-) Handler {
+) *V1Handler {
 	storageRegion := os.Getenv("AWS_REGION")
 	bucket := os.Getenv("S3_BUCKET")
 	validator := validation.NewValidator()
