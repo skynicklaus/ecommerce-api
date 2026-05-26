@@ -42,3 +42,176 @@ func (q *Queries) CreateWarehouse(ctx context.Context, arg CreateWarehouseParams
 	)
 	return i, err
 }
+
+const getWarehouseByIDAndOrganization = `-- name: GetWarehouseByIDAndOrganization :one
+SELECT
+    w.id,
+    w.organization_id,
+    w.name,
+    w.address_id,
+    w.is_active,
+    a.label AS address_label,
+    a.line1 AS address_line1,
+    a.line2 AS address_line2,
+    a.postal_code AS address_postal_code,
+    a.city AS address_city,
+    a.state AS address_state,
+    a.country AS address_country
+FROM
+    warehouses w
+    JOIN addresses a ON a.id = w.address_id
+WHERE
+    w.id = $1
+    AND w.organization_id = $2
+LIMIT
+    1
+`
+
+type GetWarehouseByIDAndOrganizationParams struct {
+	ID             int64     `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+}
+
+type GetWarehouseByIDAndOrganizationRow struct {
+	ID                int64     `json:"id"`
+	OrganizationID    uuid.UUID `json:"organization_id"`
+	Name              string    `json:"name"`
+	AddressID         uuid.UUID `json:"address_id"`
+	IsActive          bool      `json:"is_active"`
+	AddressLabel      string    `json:"address_label"`
+	AddressLine1      string    `json:"address_line1"`
+	AddressLine2      *string   `json:"address_line2"`
+	AddressPostalCode string    `json:"address_postal_code"`
+	AddressCity       string    `json:"address_city"`
+	AddressState      string    `json:"address_state"`
+	AddressCountry    string    `json:"address_country"`
+}
+
+func (q *Queries) GetWarehouseByIDAndOrganization(ctx context.Context, arg GetWarehouseByIDAndOrganizationParams) (GetWarehouseByIDAndOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, getWarehouseByIDAndOrganization, arg.ID, arg.OrganizationID)
+	var i GetWarehouseByIDAndOrganizationRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Name,
+		&i.AddressID,
+		&i.IsActive,
+		&i.AddressLabel,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.AddressPostalCode,
+		&i.AddressCity,
+		&i.AddressState,
+		&i.AddressCountry,
+	)
+	return i, err
+}
+
+const listWarehousesByOrganization = `-- name: ListWarehousesByOrganization :many
+SELECT
+    w.id,
+    w.organization_id,
+    w.name,
+    w.address_id,
+    w.is_active,
+    a.label AS address_label,
+    a.line1 AS address_line1,
+    a.line2 AS address_line2,
+    a.postal_code AS address_postal_code,
+    a.city AS address_city,
+    a.state AS address_state,
+    a.country AS address_country
+FROM
+    warehouses w
+    JOIN addresses a ON a.id = w.address_id
+WHERE
+    w.organization_id = $1
+ORDER BY
+    w.id
+`
+
+type ListWarehousesByOrganizationRow struct {
+	ID                int64     `json:"id"`
+	OrganizationID    uuid.UUID `json:"organization_id"`
+	Name              string    `json:"name"`
+	AddressID         uuid.UUID `json:"address_id"`
+	IsActive          bool      `json:"is_active"`
+	AddressLabel      string    `json:"address_label"`
+	AddressLine1      string    `json:"address_line1"`
+	AddressLine2      *string   `json:"address_line2"`
+	AddressPostalCode string    `json:"address_postal_code"`
+	AddressCity       string    `json:"address_city"`
+	AddressState      string    `json:"address_state"`
+	AddressCountry    string    `json:"address_country"`
+}
+
+func (q *Queries) ListWarehousesByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListWarehousesByOrganizationRow, error) {
+	rows, err := q.db.Query(ctx, listWarehousesByOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWarehousesByOrganizationRow{}
+	for rows.Next() {
+		var i ListWarehousesByOrganizationRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Name,
+			&i.AddressID,
+			&i.IsActive,
+			&i.AddressLabel,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.AddressPostalCode,
+			&i.AddressCity,
+			&i.AddressState,
+			&i.AddressCountry,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateWarehouse = `-- name: UpdateWarehouse :one
+UPDATE
+    warehouses
+SET
+    name = $3,
+    is_active = $4
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    id, organization_id, name, address_id, is_active
+`
+
+type UpdateWarehouseParams struct {
+	ID             int64     `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Name           string    `json:"name"`
+	IsActive       bool      `json:"is_active"`
+}
+
+func (q *Queries) UpdateWarehouse(ctx context.Context, arg UpdateWarehouseParams) (Warehouse, error) {
+	row := q.db.QueryRow(ctx, updateWarehouse,
+		arg.ID,
+		arg.OrganizationID,
+		arg.Name,
+		arg.IsActive,
+	)
+	var i Warehouse
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Name,
+		&i.AddressID,
+		&i.IsActive,
+	)
+	return i, err
+}
