@@ -38,7 +38,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_assets_product_id ON product
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_product_assets_variant ON product_assets (product_variant_id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_warehouses_organization_id ON warehouses (organization_id);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_warehouses_organization_id_id ON warehouses (organization_id, id);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_warehouses_address_id ON warehouses (address_id);
 
@@ -85,7 +85,7 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_inventories_warehouse_id;
 
 DROP INDEX CONCURRENTLY IF EXISTS idx_warehouses_address_id;
 
-DROP INDEX CONCURRENTLY IF EXISTS idx_warehouses_organization_id;
+DROP INDEX CONCURRENTLY IF EXISTS idx_warehouses_organization_id_id;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_product_assets_variant;
 
