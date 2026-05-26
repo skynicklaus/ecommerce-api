@@ -24,7 +24,7 @@ type UserCredentialRegistrationRequest struct {
 	RoleSlug string `json:"roleSlug" validate:"required"`
 }
 
-type UseerCredentialRegistrationResults struct {
+type UserCredentialRegistrationResponse struct {
 	StatusCode int               `json:"statusCode"`
 	User       db.RegisteredUser `json:"user"`
 }
@@ -148,7 +148,7 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 		return err
 	}
 
-	resp := UseerCredentialRegistrationResults{
+	resp := UserCredentialRegistrationResponse{
 		StatusCode: http.StatusCreated,
 		User:       txResult.User,
 	}

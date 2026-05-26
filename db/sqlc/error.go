@@ -50,6 +50,6 @@ func IsUniqueViolation(err error) bool {
 
 // db custom error
 var (
-	ErrMismatchOrganizationType = errors.New("organization type mistmatch")
+	ErrMismatchOrganizationType = errors.New("organization type mismatch")
 	ErrInvalidUserType          = errors.New("invalid user type")
 )

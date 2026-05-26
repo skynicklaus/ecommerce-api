@@ -17,7 +17,7 @@ import (
 
 const (
 	ServerReadTimeout       = 10 * time.Second
-	ServerReadHeaderTimouet = 10 * time.Second
+	ServerReadHeaderTimeout = 10 * time.Second
 	ServerWriteTimeout      = 20 * time.Second
 	ServerIdleTimeout       = 120 * time.Second
 )
@@ -55,7 +55,7 @@ func NewServer(store db.Store, logger *util.ServerLogger) *http.Server {
 		Addr:              fmt.Sprintf(":%d", newServer.port),
 		Handler:           newServer.RegisterRoutes(),
 		ReadTimeout:       ServerReadTimeout,
-		ReadHeaderTimeout: ServerReadHeaderTimouet,
+		ReadHeaderTimeout: ServerReadHeaderTimeout,
 		WriteTimeout:      ServerWriteTimeout,
 		IdleTimeout:       ServerIdleTimeout,
 	}

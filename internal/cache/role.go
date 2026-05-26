@@ -106,7 +106,7 @@ func getRolesJSONCache(
 	case string(util.OrganizationTypeCompany):
 		cacheKey = SystemCompanyRolesCacheKey
 	default:
-		return nil, errors.New("invalid organizationType")
+		return nil, errors.New("invalid organization type")
 	}
 
 	if roles, err := getRolesJSONCacheData(ctx, client, cacheKey); err == nil {

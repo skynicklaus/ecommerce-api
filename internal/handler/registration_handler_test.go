@@ -165,7 +165,7 @@ func TestManagementHandlers_Integration(t *testing.T) {
 			r.ServeHTTP(rr, req)
 			require.Equal(t, http.StatusCreated, rr.Code)
 
-			var resp UseerCredentialRegistrationResults
+			var resp UserCredentialRegistrationResponse
 			require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 			require.NotEmpty(t, resp.User.ID)
 		})
