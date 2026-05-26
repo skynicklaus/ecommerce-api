@@ -32,12 +32,12 @@ type UserCredentialRegistrationResponse struct {
 func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
-	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(w, r, req); err != nil {
+	var req UserCredentialRegistrationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
 		return err
 	}
 
-	if err := h.validate(req); err != nil {
+	if err := h.validate(&req); err != nil {
 		return apierror.ErrValidation(err)
 	}
 
@@ -83,12 +83,12 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 ) error {
 	ctx := r.Context()
 
-	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(w, r, req); err != nil {
+	var req UserCredentialRegistrationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
 		return err
 	}
 
-	if err := h.validate(req); err != nil {
+	if err := h.validate(&req); err != nil {
 		return apierror.ErrValidation(err)
 	}
 
@@ -159,12 +159,12 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
-	req := new(UserCredentialRegistrationRequest)
-	if err := decodeJSON(w, r, req); err != nil {
+	var req UserCredentialRegistrationRequest
+	if err := decodeJSON(w, r, &req); err != nil {
 		return err
 	}
 
-	if err := h.validate(req); err != nil {
+	if err := h.validate(&req); err != nil {
 		return apierror.ErrValidation(err)
 	}
 
@@ -173,7 +173,7 @@ func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *htt
 		return err
 	}
 
-	txResult, err := registerNewCustomer(ctx, h.store, h.cache, req, hashedPassword)
+	txResult, err := registerNewCustomer(ctx, h.store, h.cache, &req, hashedPassword)
 	if err != nil {
 		return err
 	}
