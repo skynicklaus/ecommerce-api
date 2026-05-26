@@ -102,6 +102,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 			r.Delete("/products/{id}", s.make(v1Handler.DeleteProduct))
 			r.Get("/merchant/products", s.make(v1Handler.ListMerchantProducts))
 			r.Get("/merchant/products/{id}", s.make(v1Handler.GetMerchantProductDetails))
+			r.Get("/merchant/products/{id}/inventory", s.make(v1Handler.ListProductInventory))
+			r.Post("/merchant/warehouses", s.make(v1Handler.CreateWarehouse))
+			r.Get("/merchant/warehouses", s.make(v1Handler.ListWarehouses))
+			r.Put("/merchant/warehouses/{id}", s.make(v1Handler.UpdateWarehouse))
+			r.Put("/merchant/inventory", s.make(v1Handler.UpsertInventory))
+			r.Get("/merchant/inventory", s.make(v1Handler.ListInventory))
 		})
 
 		// Protected Platform Admin Routes
