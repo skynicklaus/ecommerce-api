@@ -39,3 +39,21 @@ ORDER BY
     id
 LIMIT
     1;
+
+-- name: UpdateAddressByIDAndOrganization :one
+UPDATE
+    addresses
+SET
+    label = $3,
+    line1 = $4,
+    line2 = $5,
+    postal_code = $6,
+    city = $7,
+    state = $8,
+    country = $9,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    *;

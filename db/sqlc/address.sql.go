@@ -136,3 +136,66 @@ func (q *Queries) GetAddressByID(ctx context.Context, id uuid.UUID) (GetAddressB
 	)
 	return i, err
 }
+
+const updateAddressByIDAndOrganization = `-- name: UpdateAddressByIDAndOrganization :one
+UPDATE
+    addresses
+SET
+    label = $3,
+    line1 = $4,
+    line2 = $5,
+    postal_code = $6,
+    city = $7,
+    state = $8,
+    country = $9,
+    updated_at = NOW()
+WHERE
+    id = $1
+    AND organization_id = $2
+RETURNING
+    id, organization_id, type, label, line1, line2, postal_code, city, state, country, is_default_shipping, is_default_billing, created_at, updated_at
+`
+
+type UpdateAddressByIDAndOrganizationParams struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	Label          string    `json:"label"`
+	Line1          string    `json:"line1"`
+	Line2          *string   `json:"line2"`
+	PostalCode     string    `json:"postal_code"`
+	City           string    `json:"city"`
+	State          string    `json:"state"`
+	Country        string    `json:"country"`
+}
+
+func (q *Queries) UpdateAddressByIDAndOrganization(ctx context.Context, arg UpdateAddressByIDAndOrganizationParams) (Address, error) {
+	row := q.db.QueryRow(ctx, updateAddressByIDAndOrganization,
+		arg.ID,
+		arg.OrganizationID,
+		arg.Label,
+		arg.Line1,
+		arg.Line2,
+		arg.PostalCode,
+		arg.City,
+		arg.State,
+		arg.Country,
+	)
+	var i Address
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Type,
+		&i.Label,
+		&i.Line1,
+		&i.Line2,
+		&i.PostalCode,
+		&i.City,
+		&i.State,
+		&i.Country,
+		&i.IsDefaultShipping,
+		&i.IsDefaultBilling,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
