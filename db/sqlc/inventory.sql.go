@@ -52,8 +52,399 @@ func (q *Queries) CreateInventory(ctx context.Context, arg CreateInventoryParams
 	return i, err
 }
 
+const getInventoryByVariantAndWarehouseForOrganization = `-- name: GetInventoryByVariantAndWarehouseForOrganization :one
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active,
+    pv.product_id,
+    pv.sku AS product_variant_sku,
+    pv.name AS product_variant_name,
+    p.name AS product_name,
+    w.name AS warehouse_name
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN products p ON p.id = pv.product_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    pv.organization_id = $1::UUID
+    AND w.organization_id = $1::UUID
+    AND i.product_variant_id = $2::UUID
+    AND i.warehouse_id = $3::BIGINT
+LIMIT
+    1
+`
+
+type GetInventoryByVariantAndWarehouseForOrganizationParams struct {
+	OrganizationID   uuid.UUID `json:"organization_id"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+}
+
+type GetInventoryByVariantAndWarehouseForOrganizationRow struct {
+	ProductVariantID   uuid.UUID `json:"product_variant_id"`
+	WarehouseID        int64     `json:"warehouse_id"`
+	QuantityOnHand     int32     `json:"quantity_on_hand"`
+	QuantityReserved   int32     `json:"quantity_reserved"`
+	QuantityAvailable  *int32    `json:"quantity_available"`
+	LowStockThreshold  *int32    `json:"low_stock_threshold"`
+	IsActive           bool      `json:"is_active"`
+	ProductID          uuid.UUID `json:"product_id"`
+	ProductVariantSku  string    `json:"product_variant_sku"`
+	ProductVariantName string    `json:"product_variant_name"`
+	ProductName        string    `json:"product_name"`
+	WarehouseName      string    `json:"warehouse_name"`
+}
+
+func (q *Queries) GetInventoryByVariantAndWarehouseForOrganization(ctx context.Context, arg GetInventoryByVariantAndWarehouseForOrganizationParams) (GetInventoryByVariantAndWarehouseForOrganizationRow, error) {
+	row := q.db.QueryRow(ctx, getInventoryByVariantAndWarehouseForOrganization, arg.OrganizationID, arg.ProductVariantID, arg.WarehouseID)
+	var i GetInventoryByVariantAndWarehouseForOrganizationRow
+	err := row.Scan(
+		&i.ProductVariantID,
+		&i.WarehouseID,
+		&i.QuantityOnHand,
+		&i.QuantityReserved,
+		&i.QuantityAvailable,
+		&i.LowStockThreshold,
+		&i.IsActive,
+		&i.ProductID,
+		&i.ProductVariantSku,
+		&i.ProductVariantName,
+		&i.ProductName,
+		&i.WarehouseName,
+	)
+	return i, err
+}
+
 const getWarehouseVariantInventory = `-- name: GetWarehouseVariantInventory :one
 SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    pv.organization_id = $1::UUID
+    AND w.organization_id = $1::UUID
+    AND i.product_variant_id = $2::UUID
+    AND i.warehouse_id = $3::BIGINT
+ORDER BY
+    i.product_variant_id
+LIMIT
+    1
+`
+
+type GetWarehouseVariantInventoryParams struct {
+	OrganizationID   uuid.UUID `json:"organization_id"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+}
+
+func (q *Queries) GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, getWarehouseVariantInventory, arg.OrganizationID, arg.ProductVariantID, arg.WarehouseID)
+	var i Inventory
+	err := row.Scan(
+		&i.ProductVariantID,
+		&i.WarehouseID,
+		&i.QuantityOnHand,
+		&i.QuantityReserved,
+		&i.QuantityAvailable,
+		&i.LowStockThreshold,
+		&i.IsActive,
+	)
+	return i, err
+}
+
+const listInventoryByOrganization = `-- name: ListInventoryByOrganization :many
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active,
+    pv.product_id,
+    pv.sku AS product_variant_sku,
+    pv.name AS product_variant_name,
+    p.name AS product_name,
+    w.name AS warehouse_name
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN products p ON p.id = pv.product_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    pv.organization_id = $1
+    AND w.organization_id = $1
+ORDER BY
+    p.name,
+    pv.name,
+    w.name
+`
+
+type ListInventoryByOrganizationRow struct {
+	ProductVariantID   uuid.UUID `json:"product_variant_id"`
+	WarehouseID        int64     `json:"warehouse_id"`
+	QuantityOnHand     int32     `json:"quantity_on_hand"`
+	QuantityReserved   int32     `json:"quantity_reserved"`
+	QuantityAvailable  *int32    `json:"quantity_available"`
+	LowStockThreshold  *int32    `json:"low_stock_threshold"`
+	IsActive           bool      `json:"is_active"`
+	ProductID          uuid.UUID `json:"product_id"`
+	ProductVariantSku  string    `json:"product_variant_sku"`
+	ProductVariantName string    `json:"product_variant_name"`
+	ProductName        string    `json:"product_name"`
+	WarehouseName      string    `json:"warehouse_name"`
+}
+
+func (q *Queries) ListInventoryByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListInventoryByOrganizationRow, error) {
+	rows, err := q.db.Query(ctx, listInventoryByOrganization, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInventoryByOrganizationRow{}
+	for rows.Next() {
+		var i ListInventoryByOrganizationRow
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.WarehouseID,
+			&i.QuantityOnHand,
+			&i.QuantityReserved,
+			&i.QuantityAvailable,
+			&i.LowStockThreshold,
+			&i.IsActive,
+			&i.ProductID,
+			&i.ProductVariantSku,
+			&i.ProductVariantName,
+			&i.ProductName,
+			&i.WarehouseName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInventoryByProduct = `-- name: ListInventoryByProduct :many
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active,
+    pv.product_id,
+    pv.sku AS product_variant_sku,
+    pv.name AS product_variant_name,
+    p.name AS product_name,
+    w.name AS warehouse_name
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN products p ON p.id = pv.product_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    pv.organization_id = $1::UUID
+    AND w.organization_id = $1::UUID
+    AND pv.product_id = $2::UUID
+ORDER BY
+    pv.name,
+    w.name
+`
+
+type ListInventoryByProductParams struct {
+	OrganizationID uuid.UUID `json:"organization_id"`
+	ProductID      uuid.UUID `json:"product_id"`
+}
+
+type ListInventoryByProductRow struct {
+	ProductVariantID   uuid.UUID `json:"product_variant_id"`
+	WarehouseID        int64     `json:"warehouse_id"`
+	QuantityOnHand     int32     `json:"quantity_on_hand"`
+	QuantityReserved   int32     `json:"quantity_reserved"`
+	QuantityAvailable  *int32    `json:"quantity_available"`
+	LowStockThreshold  *int32    `json:"low_stock_threshold"`
+	IsActive           bool      `json:"is_active"`
+	ProductID          uuid.UUID `json:"product_id"`
+	ProductVariantSku  string    `json:"product_variant_sku"`
+	ProductVariantName string    `json:"product_variant_name"`
+	ProductName        string    `json:"product_name"`
+	WarehouseName      string    `json:"warehouse_name"`
+}
+
+func (q *Queries) ListInventoryByProduct(ctx context.Context, arg ListInventoryByProductParams) ([]ListInventoryByProductRow, error) {
+	rows, err := q.db.Query(ctx, listInventoryByProduct, arg.OrganizationID, arg.ProductID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInventoryByProductRow{}
+	for rows.Next() {
+		var i ListInventoryByProductRow
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.WarehouseID,
+			&i.QuantityOnHand,
+			&i.QuantityReserved,
+			&i.QuantityAvailable,
+			&i.LowStockThreshold,
+			&i.IsActive,
+			&i.ProductID,
+			&i.ProductVariantSku,
+			&i.ProductVariantName,
+			&i.ProductName,
+			&i.WarehouseName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInventoryByVariant = `-- name: ListInventoryByVariant :many
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active,
+    pv.product_id,
+    pv.sku AS product_variant_sku,
+    pv.name AS product_variant_name,
+    p.name AS product_name,
+    w.name AS warehouse_name
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN products p ON p.id = pv.product_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    pv.organization_id = $1::UUID
+    AND w.organization_id = $1::UUID
+    AND i.product_variant_id = $2::UUID
+ORDER BY
+    w.name
+`
+
+type ListInventoryByVariantParams struct {
+	OrganizationID   uuid.UUID `json:"organization_id"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+}
+
+type ListInventoryByVariantRow struct {
+	ProductVariantID   uuid.UUID `json:"product_variant_id"`
+	WarehouseID        int64     `json:"warehouse_id"`
+	QuantityOnHand     int32     `json:"quantity_on_hand"`
+	QuantityReserved   int32     `json:"quantity_reserved"`
+	QuantityAvailable  *int32    `json:"quantity_available"`
+	LowStockThreshold  *int32    `json:"low_stock_threshold"`
+	IsActive           bool      `json:"is_active"`
+	ProductID          uuid.UUID `json:"product_id"`
+	ProductVariantSku  string    `json:"product_variant_sku"`
+	ProductVariantName string    `json:"product_variant_name"`
+	ProductName        string    `json:"product_name"`
+	WarehouseName      string    `json:"warehouse_name"`
+}
+
+func (q *Queries) ListInventoryByVariant(ctx context.Context, arg ListInventoryByVariantParams) ([]ListInventoryByVariantRow, error) {
+	rows, err := q.db.Query(ctx, listInventoryByVariant, arg.OrganizationID, arg.ProductVariantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListInventoryByVariantRow{}
+	for rows.Next() {
+		var i ListInventoryByVariantRow
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.WarehouseID,
+			&i.QuantityOnHand,
+			&i.QuantityReserved,
+			&i.QuantityAvailable,
+			&i.LowStockThreshold,
+			&i.IsActive,
+			&i.ProductID,
+			&i.ProductVariantSku,
+			&i.ProductVariantName,
+			&i.ProductName,
+			&i.WarehouseName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const upsertInventory = `-- name: UpsertInventory :one
+WITH variant AS (
+    SELECT
+        id
+    FROM
+        product_variants
+    WHERE
+        id = $4::UUID
+        AND organization_id = $5::UUID
+),
+warehouse AS (
+    SELECT
+        id
+    FROM
+        warehouses
+    WHERE
+        id = $6::BIGINT
+        AND organization_id = $5::UUID
+)
+INSERT INTO
+    inventories (
+        product_variant_id,
+        warehouse_id,
+        quantity_on_hand,
+        low_stock_threshold,
+        is_active
+    )
+SELECT
+    variant.id,
+    warehouse.id,
+    $1::INT,
+    $2::INT,
+    $3::BOOL
+FROM
+    variant,
+    warehouse
+ON CONFLICT (product_variant_id, warehouse_id) DO UPDATE
+SET
+    quantity_on_hand = EXCLUDED.quantity_on_hand,
+    low_stock_threshold = EXCLUDED.low_stock_threshold,
+    is_active = EXCLUDED.is_active
+RETURNING
     product_variant_id,
     warehouse_id,
     quantity_on_hand,
@@ -61,24 +452,28 @@ SELECT
     quantity_available,
     low_stock_threshold,
     is_active
-FROM
-    inventories
-WHERE
-    product_variant_id = $1
-    AND warehouse_id = $2
-ORDER BY
-    product_variant_id
-LIMIT
-    1
 `
 
-type GetWarehouseVariantInventoryParams struct {
-	ProductVariantID uuid.UUID `json:"product_variant_id"`
-	WarehouseID      int64     `json:"warehouse_id"`
+type UpsertInventoryParams struct {
+	QuantityOnHand    int32     `json:"quantity_on_hand"`
+	LowStockThreshold *int32    `json:"low_stock_threshold"`
+	IsActive          bool      `json:"is_active"`
+	ProductVariantID  uuid.UUID `json:"product_variant_id"`
+	OrganizationID    uuid.UUID `json:"organization_id"`
+	WarehouseID       int64     `json:"warehouse_id"`
 }
 
-func (q *Queries) GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error) {
-	row := q.db.QueryRow(ctx, getWarehouseVariantInventory, arg.ProductVariantID, arg.WarehouseID)
+// If either ID does not belong to the organization, the SELECT below returns no
+// rows. sqlc maps that empty RETURNING result to ErrNotFound for the handler.
+func (q *Queries) UpsertInventory(ctx context.Context, arg UpsertInventoryParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, upsertInventory,
+		arg.QuantityOnHand,
+		arg.LowStockThreshold,
+		arg.IsActive,
+		arg.ProductVariantID,
+		arg.OrganizationID,
+		arg.WarehouseID,
+	)
 	var i Inventory
 	err := row.Scan(
 		&i.ProductVariantID,
