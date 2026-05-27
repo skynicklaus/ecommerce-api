@@ -69,7 +69,7 @@ type Querier interface {
 	GetWarehouseByIDAndOrganization(ctx context.Context, arg GetWarehouseByIDAndOrganizationParams) (GetWarehouseByIDAndOrganizationRow, error)
 	GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error)
 	ListActiveProductsAfter(ctx context.Context, arg ListActiveProductsAfterParams) ([]ListActiveProductsAfterRow, error)
-	ListInventoryByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListInventoryByOrganizationRow, error)
+	ListInventoryByOrganization(ctx context.Context, arg ListInventoryByOrganizationParams) ([]ListInventoryByOrganizationRow, error)
 	ListInventoryByProduct(ctx context.Context, arg ListInventoryByProductParams) ([]ListInventoryByProductRow, error)
 	ListInventoryByVariant(ctx context.Context, arg ListInventoryByVariantParams) ([]ListInventoryByVariantRow, error)
 	ListOrganizationRolesByType(ctx context.Context, arg ListOrganizationRolesByTypeParams) ([]Role, error)
