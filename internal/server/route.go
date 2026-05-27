@@ -11,7 +11,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/httplog/v3"
 	"github.com/go-chi/traceid"
+	httpSwagger "github.com/swaggo/http-swagger"
 
+	_ "github.com/skynicklaus/ecommerce-api/docs"
 	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/handler"
 	midware "github.com/skynicklaus/ecommerce-api/internal/middleware"
@@ -52,6 +54,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.Get("/health", s.make(func(w http.ResponseWriter, _ *http.Request) error {
 		return handler.WriteText(w, http.StatusOK, "OK")
 	}))
+	if isSwaggerEnabled() {
+		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	}
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
@@ -177,4 +182,13 @@ func isSensitiveRoute(path string) bool {
 	return strings.HasPrefix(path, "/v1/auth/") ||
 		strings.HasPrefix(path, "/v1/users/") ||
 		path == "/v1/customer"
+}
+
+func isSwaggerEnabled() bool {
+	switch strings.ToLower(os.Getenv("APP_ENV")) {
+	case "local", "development", "staging":
+		return true
+	default:
+		return false
+	}
 }
