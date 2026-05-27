@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS products (
     CONSTRAINT fk_products_organization_id FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
     CONSTRAINT fk_products_category_id FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE CASCADE,
     CONSTRAINT check_products_status CHECK (
-        STATUS IN (
+        "status" IN (
             'active',
             'draft',
             'archived',
