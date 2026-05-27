@@ -106,12 +106,32 @@ FROM
     JOIN products p ON p.id = pv.product_id
     JOIN warehouses w ON w.id = i.warehouse_id
 WHERE
-    pv.organization_id = $1
-    AND w.organization_id = $1
+    pv.organization_id = sqlc.arg('organization_id')::UUID
+    AND w.organization_id = sqlc.arg('organization_id')::UUID
+    AND (
+        NOT sqlc.arg('has_cursor')::BOOL
+        OR (
+            p.name,
+            pv.name,
+            w.name,
+            i.product_variant_id,
+            i.warehouse_id
+        ) > (
+            sqlc.arg('after_product_name')::TEXT,
+            sqlc.arg('after_variant_name')::TEXT,
+            sqlc.arg('after_warehouse_name')::TEXT,
+            sqlc.arg('after_product_variant_id')::UUID,
+            sqlc.arg('after_warehouse_id')::BIGINT
+        )
+    )
 ORDER BY
     p.name,
     pv.name,
-    w.name;
+    w.name,
+    i.product_variant_id,
+    i.warehouse_id
+LIMIT
+    sqlc.arg('page_limit')::INT;
 
 -- name: ListInventoryByProduct :many
 SELECT
