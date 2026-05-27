@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/go-chi/traceid"
 	httpSwagger "github.com/swaggo/http-swagger"
 
-	_ "github.com/skynicklaus/ecommerce-api/docs"
+	docs "github.com/skynicklaus/ecommerce-api/docs"
 	"github.com/skynicklaus/ecommerce-api/internal/apierror"
 	"github.com/skynicklaus/ecommerce-api/internal/handler"
 	midware "github.com/skynicklaus/ecommerce-api/internal/middleware"
@@ -55,6 +56,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 		return handler.WriteText(w, http.StatusOK, "OK")
 	}))
 	if isSwaggerEnabled() {
+		configureSwaggerInfo()
 		r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 	}
 
@@ -190,5 +192,24 @@ func isSwaggerEnabled() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func configureSwaggerInfo() {
+	externalBaseURL := strings.TrimSpace(os.Getenv("EXTERNAL_BASE_URL"))
+	if externalBaseURL == "" {
+		docs.SwaggerInfo.Host = "localhost:8080"
+		return
+	}
+
+	parsed, err := url.Parse(externalBaseURL)
+	if err != nil || parsed.Host == "" {
+		docs.SwaggerInfo.Host = strings.TrimSuffix(externalBaseURL, "/")
+		return
+	}
+
+	docs.SwaggerInfo.Host = parsed.Host
+	if parsed.Scheme != "" {
+		docs.SwaggerInfo.Schemes = []string{parsed.Scheme}
 	}
 }
