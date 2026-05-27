@@ -122,7 +122,7 @@ type inventoryCursorPayload struct {
 //	@Tags			inventory
 //	@Produce		json
 //	@Param			variantId	query		string	false	"Product variant UUID"
-//	@Param			limit		query		int		false	"Page size for organization inventory"	minimum(1)	maximum(100)	default(50)
+//	@Param			limit		query		int		false	"Page size for organization inventory"	minimum(1)	maximum(100)	default(20)
 //	@Param			cursor		query		string	false	"Opaque cursor returned from a previous organization inventory page"
 //	@Success		200			{object}	ListInventoryResponse
 //	@Failure		400			{object}	apierror.APIError
