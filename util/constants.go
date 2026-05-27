@@ -51,6 +51,14 @@ const (
 	OrganizationTypeCompany    OrganizationType = "company"
 )
 
+type OrganizationCapability string
+
+const (
+	OrganizationCapabilityPlatform OrganizationCapability = "platform"
+	OrganizationCapabilityBuyer    OrganizationCapability = "buyer"
+	OrganizationCapabilitySeller   OrganizationCapability = "seller"
+)
+
 type OrganizationStatus string
 
 const (
