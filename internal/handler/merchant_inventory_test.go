@@ -79,13 +79,22 @@ func createWarehouseFixtureForHandler(
 	tc warehouseInventoryTestContext,
 ) db.Warehouse {
 	t.Helper()
+	return createWarehouseFixtureForHandlerWithName(t, tc, "Inventory Warehouse")
+}
+
+func createWarehouseFixtureForHandlerWithName(
+	t *testing.T,
+	tc warehouseInventoryTestContext,
+	name string,
+) db.Warehouse {
+	t.Helper()
 
 	result, err := tc.store.CreateWarehouseTx(t.Context(), db.CreateWarehouseTxParams{
 		OrganizationID: tc.organization.ID,
-		Name:           "Inventory Warehouse",
+		Name:           name,
 		Address: db.CreateAddressParams{
 			Type:       string(util.AddressWarehouse),
-			Label:      "Inventory warehouse",
+			Label:      name,
 			Line1:      "789 Storage Road",
 			PostalCode: "11111",
 			City:       "Austin",
