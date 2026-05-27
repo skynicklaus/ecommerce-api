@@ -51,7 +51,7 @@ type SQLStore struct {
 
 func NewStore(connPool *pgxpool.Pool) Store {
 	return &SQLStore{
-		Queries:  New(connPool),
+		Queries:  New(newRLSDBTX(connPool)),
 		connPool: connPool,
 	}
 }
