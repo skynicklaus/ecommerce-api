@@ -263,6 +263,10 @@ CREATE TRIGGER trg_customer_accounts_updated_at BEFORE
 UPDATE
     ON customer_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_sessions_updated_at BEFORE
+UPDATE
+    ON sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER trg_roles_updated_at BEFORE
 UPDATE
     ON roles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -310,6 +314,8 @@ DROP FUNCTION IF EXISTS protect_platform_org() CASCADE;
 DROP TRIGGER IF EXISTS trg_addresses_updated_at ON addresses;
 
 DROP TRIGGER IF EXISTS trg_roles_updated_at ON roles;
+
+DROP TRIGGER IF EXISTS trg_sessions_updated_at ON sessions;
 
 DROP TRIGGER IF EXISTS trg_customer_accounts_updated_at ON customer_accounts;
 
