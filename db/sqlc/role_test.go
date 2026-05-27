@@ -109,12 +109,13 @@ func TestListOrganizationRolesByType(t *testing.T) {
 
 	makeOrg := func() db.Organization {
 		org, err := testStore.CreateOrganization(ctx, db.CreateOrganizationParams{
-			ParentID: nil,
-			Name:     util.GetRandomString(t, 8),
-			Type:     string(util.OrganizationTypeMerchant),
-			Slug:     fmt.Sprintf("merchant.%s", util.GetRandomString(t, 10)),
-			Status:   string(util.OrganizationStatusActive),
-			Metadata: nil,
+			ParentID:   nil,
+			Name:       util.GetRandomString(t, 8),
+			Type:       string(util.OrganizationTypeMerchant),
+			Capability: string(util.OrganizationCapabilitySeller),
+			Slug:       fmt.Sprintf("merchant.%s", util.GetRandomString(t, 10)),
+			Status:     string(util.OrganizationStatusActive),
+			Metadata:   nil,
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() {
