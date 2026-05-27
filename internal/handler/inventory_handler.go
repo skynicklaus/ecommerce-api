@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -35,10 +37,23 @@ type InventoryResponse struct {
 	WarehouseName     string    `json:"warehouseName,omitempty"`
 }
 
-type ListInventoryResponse struct {
-	Data []InventoryResponse `json:"data"`
-}
-
+// UpsertInventory godoc
+//
+//	@Summary		Upsert inventory
+//	@Description	Creates or updates inventory for a product variant in a warehouse.
+//	@Tags			inventory
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		UpsertInventoryRequest	true	"Inventory payload"
+//	@Success		200		{object}	InventoryResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		404		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/inventory [put]
 func (h *V1Handler) UpsertInventory(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -87,6 +102,35 @@ func (h *V1Handler) UpsertInventory(w http.ResponseWriter, r *http.Request) erro
 	return WriteJSON(w, http.StatusOK, inventoryDetailResponse(row))
 }
 
+type ListInventoryResponse struct {
+	Data       []InventoryResponse `json:"data"`
+	NextCursor *string             `json:"nextCursor,omitempty"`
+}
+
+type inventoryCursorPayload struct {
+	ProductName      string    `json:"productName"`
+	VariantName      string    `json:"variantName"`
+	WarehouseName    string    `json:"warehouseName"`
+	ProductVariantID uuid.UUID `json:"productVariantId"`
+	WarehouseID      int64     `json:"warehouseId"`
+}
+
+// ListInventory godoc
+//
+//	@Summary		List inventory
+//	@Description	Lists merchant inventory by organization, or filters by variantId when provided.
+//	@Tags			inventory
+//	@Produce		json
+//	@Param			variantId	query		string	false	"Product variant UUID"
+//	@Param			limit		query		int		false	"Page size for organization inventory"	minimum(1)	maximum(100)	default(50)
+//	@Param			cursor		query		string	false	"Opaque cursor returned from a previous organization inventory page"
+//	@Success		200			{object}	ListInventoryResponse
+//	@Failure		400			{object}	apierror.APIError
+//	@Failure		401			{object}	apierror.APIError
+//	@Failure		403			{object}	apierror.APIError
+//	@Failure		500			{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/inventory [get]
 func (h *V1Handler) ListInventory(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -119,12 +163,45 @@ func (h *V1Handler) ListInventory(w http.ResponseWriter, r *http.Request) error 
 			resp[i] = inventoryVariantRowResponse(row)
 		}
 
-		return WriteJSON(w, http.StatusOK, ListInventoryResponse{Data: resp})
+		return WriteJSON(w, http.StatusOK, ListInventoryResponse{Data: resp, NextCursor: nil})
 	}
 
-	rows, err = h.store.ListInventoryByOrganization(ctx, organization.ID)
+	limit := parseLimit(r)
+	queryLimit := limit + 1
+	cursor, hasCursor, cursorErr := decodeInventoryCursor(r.URL.Query().Get("cursor"))
+	if cursorErr != nil {
+		return apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("invalid cursor: %w", cursorErr),
+		)
+	}
+
+	rows, err = h.store.ListInventoryByOrganization(ctx, db.ListInventoryByOrganizationParams{
+		OrganizationID:        organization.ID,
+		HasCursor:             hasCursor,
+		AfterProductName:      cursor.ProductName,
+		AfterVariantName:      cursor.VariantName,
+		AfterWarehouseName:    cursor.WarehouseName,
+		AfterProductVariantID: cursor.ProductVariantID,
+		AfterWarehouseID:      cursor.WarehouseID,
+		PageLimit:             queryLimit,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to list inventory: %w", err)
+	}
+
+	var nextCursor *string
+	if len(rows) > int(limit) {
+		last := rows[limit-1]
+		encoded := encodeInventoryCursor(inventoryCursorPayload{
+			ProductName:      last.ProductName,
+			VariantName:      last.ProductVariantName,
+			WarehouseName:    last.WarehouseName,
+			ProductVariantID: last.ProductVariantID,
+			WarehouseID:      last.WarehouseID,
+		})
+		nextCursor = &encoded
+		rows = rows[:limit]
 	}
 
 	resp := make([]InventoryResponse, len(rows))
@@ -132,9 +209,26 @@ func (h *V1Handler) ListInventory(w http.ResponseWriter, r *http.Request) error 
 		resp[i] = inventoryOrganizationRowResponse(row)
 	}
 
-	return WriteJSON(w, http.StatusOK, ListInventoryResponse{Data: resp})
+	return WriteJSON(w, http.StatusOK, ListInventoryResponse{
+		Data:       resp,
+		NextCursor: nextCursor,
+	})
 }
 
+// ListProductInventory godoc
+//
+//	@Summary		List product inventory
+//	@Description	Lists inventory rows for all variants of a merchant product.
+//	@Tags			inventory
+//	@Produce		json
+//	@Param			id	path		string	true	"Product UUID"
+//	@Success		200	{object}	ListInventoryResponse
+//	@Failure		400	{object}	apierror.APIError
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		403	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/products/{id}/inventory [get]
 func (h *V1Handler) ListProductInventory(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -160,7 +254,7 @@ func (h *V1Handler) ListProductInventory(w http.ResponseWriter, r *http.Request)
 		resp[i] = inventoryProductRowResponse(row)
 	}
 
-	return WriteJSON(w, http.StatusOK, ListInventoryResponse{Data: resp})
+	return WriteJSON(w, http.StatusOK, ListInventoryResponse{Data: resp, NextCursor: nil})
 }
 
 func inventoryDetailResponse(
@@ -231,6 +325,36 @@ func inventoryVariantRowResponse(row db.ListInventoryByVariantRow) InventoryResp
 		VariantName:       row.ProductVariantName,
 		WarehouseName:     row.WarehouseName,
 	}
+}
+
+func encodeInventoryCursor(cursor inventoryCursorPayload) string {
+	raw, _ := json.Marshal(cursor)
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func decodeInventoryCursor(rawCursor string) (inventoryCursorPayload, bool, error) {
+	if rawCursor == "" {
+		return inventoryCursorPayload{}, false, nil
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(rawCursor)
+	if err != nil {
+		return inventoryCursorPayload{}, false, errors.New("malformed cursor encoding")
+	}
+
+	var cursor inventoryCursorPayload
+	if unmarshallErr := json.Unmarshal(raw, &cursor); unmarshallErr != nil {
+		return inventoryCursorPayload{}, false, errors.New("malformed cursor payload")
+	}
+	if cursor.ProductName == "" ||
+		cursor.VariantName == "" ||
+		cursor.WarehouseName == "" ||
+		cursor.ProductVariantID == uuid.Nil ||
+		cursor.WarehouseID <= 0 {
+		return inventoryCursorPayload{}, false, errors.New("malformed cursor values")
+	}
+
+	return cursor, true, nil
 }
 
 func int32Value(v *int32) int32 {
