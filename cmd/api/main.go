@@ -1,5 +1,16 @@
 package main
 
+//	@title						Ecommerce API
+//	@version					1.0
+//	@description				Merchant and storefront ecommerce API.
+//	@host						localhost:8080
+//	@BasePath					/v1
+//	@schemes					http https
+//	@securityDefinitions.apikey	Bearer
+//	@in							header
+//	@name						Authorization
+//	@description				Type "Bearer" followed by a space and the session token.
+
 import (
 	"context"
 	"errors"
