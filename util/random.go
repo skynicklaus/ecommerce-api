@@ -128,6 +128,22 @@ func GetRandomOrganizationStatus(t *testing.T) string {
 	return organizationStatus[randomIndex.Int64()]
 }
 
+func GetOrganizationCapabilityForType(t *testing.T, organizationType string) string {
+	t.Helper()
+
+	switch organizationType {
+	case string(OrganizationTypePlatform):
+		return string(OrganizationCapabilityPlatform)
+	case string(OrganizationTypeMerchant):
+		return string(OrganizationCapabilitySeller)
+	case string(OrganizationTypeIndividual), string(OrganizationTypeCompany):
+		return string(OrganizationCapabilityBuyer)
+	default:
+		t.Fatalf("invalid organization type: %s", organizationType)
+		return ""
+	}
+}
+
 func GetRandomHashedPassword(t *testing.T, length int) *string {
 	t.Helper()
 
