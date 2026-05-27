@@ -36,6 +36,9 @@ main
 # direnv
 .direnv
 
+# swagger
+docs
+
 # garage
 infra/garage/data
 garage.toml
