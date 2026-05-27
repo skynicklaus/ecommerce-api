@@ -56,6 +56,26 @@ type UploadTokenResponse struct {
 	ContentType  string `json:"contentType"`
 }
 
+type PreUploadAssetsResponse struct {
+	Uploads []UploadTokenResponse `json:"uploads"`
+}
+
+// PreUploadAssets godoc
+//
+//	@Summary		Pre-upload product assets
+//	@Description	Validates and processes image/video assets, stores them temporarily, and returns tokens for product create/update.
+//	@Tags			product-assets
+//	@Accept			multipart/form-data
+//	@Produce		json
+//	@Param			files	formData	file	true	"Asset files (repeat field up to 10 files)"
+//	@Success		201		{object}	PreUploadAssetsResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		413		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/product-assets [post]
 func (h *V1Handler) PreUploadAssets(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)

@@ -35,8 +35,8 @@ func mustComputeTimingSentinel() string {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"    validate:"required,email,max=254"`
-	Password string `json:"password" validate:"required,min=8,max=72"`
+	Email    string `json:"email"    validate:"required,email,max=254" example:"merchant@example.com"`
+	Password string `json:"password" validate:"required,min=8,max=72" example:"correct-horse-battery-staple"`
 }
 
 type LoginResponse struct {
@@ -45,7 +45,20 @@ type LoginResponse struct {
 	Identity  middleware.IdentityContext `json:"identity"`
 }
 
-// LoginCustomer handles buyer logins for service = 'buyer_platform'.
+// LoginCustomer godoc
+//
+//	@Summary		Customer login
+//	@Description	Authenticates a customer and creates a buyer-platform session.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login credentials"
+//	@Success		200		{object}	LoginResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Router			/auth/customer/login [post]
 func (h *V1Handler) LoginCustomer(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	var req LoginRequest
@@ -120,12 +133,38 @@ func (h *V1Handler) LoginCustomer(w http.ResponseWriter, r *http.Request) error 
 	})
 }
 
-// LoginMerchant handles merchant operator logins for service = 'merchant_panel'.
+// LoginMerchant godoc
+//
+//	@Summary		Merchant login
+//	@Description	Authenticates a merchant user and creates a merchant-panel session.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login credentials"
+//	@Success		200		{object}	LoginResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Router			/auth/merchant/login [post]
 func (h *V1Handler) LoginMerchant(w http.ResponseWriter, r *http.Request) error {
 	return h.handleUserLogin(w, r, util.SessionServiceMerchantPanel)
 }
 
-// LoginAdmin handles system administrator logins for service = 'admin_panel'.
+// LoginAdmin godoc
+//
+//	@Summary		Admin login
+//	@Description	Authenticates a platform administrator and creates an admin-panel session.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login credentials"
+//	@Success		200		{object}	LoginResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Router			/auth/admin/login [post]
 func (h *V1Handler) LoginAdmin(w http.ResponseWriter, r *http.Request) error {
 	return h.handleUserLogin(w, r, util.SessionServiceAdminPanel)
 }
@@ -280,7 +319,19 @@ func (h *V1Handler) createStatefulSession(
 	return tokenStr, expires, session.ID, nil
 }
 
-// Logout evicts the token immediately from the PostgreSQL database using context lookups.
+// Logout godoc
+//
+//	@Summary		Logout current session
+//	@Description	Revokes the active session token for the current service surface.
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	MessageResponse
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/auth/customer/logout [post]
+//	@Router			/auth/merchant/logout [post]
+//	@Router			/auth/admin/logout [post]
 func (h *V1Handler) Logout(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
@@ -301,13 +352,28 @@ func (h *V1Handler) Logout(w http.ResponseWriter, r *http.Request) error {
 	)
 }
 
-// GetMe prints the active identity context.
+// GetMe godoc
+//
+//	@Summary		Get current identity
+//	@Description	Returns the authenticated identity resolved from the active session.
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	middleware.IdentityContext
+//	@Failure		401	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/auth/customer/me [get]
+//	@Router			/auth/merchant/me [get]
+//	@Router			/auth/admin/me [get]
 func (h *V1Handler) GetMe(w http.ResponseWriter, r *http.Request) error {
 	identity, err := middleware.GetIdentityFromContext(r.Context())
 	if err != nil {
 		return apierror.NewAPIError(http.StatusUnauthorized, err)
 	}
 	return WriteJSON(w, http.StatusOK, identity)
+}
+
+type MessageResponse struct {
+	Message string `json:"message" example:"logged out successfully"`
 }
 
 type SessionMetadataResponse struct {
@@ -321,7 +387,19 @@ type SessionMetadataResponse struct {
 	IsCurrent bool      `json:"isCurrent"`
 }
 
-// ListActiveSessions returns all valid sessions for the active identity.
+// ListActiveSessions godoc
+//
+//	@Summary		List active sessions
+//	@Description	Lists valid sessions for the authenticated identity on the current service surface.
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{array}		SessionMetadataResponse
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/auth/customer/sessions [get]
+//	@Router			/auth/merchant/sessions [get]
+//	@Router			/auth/admin/sessions [get]
 func (h *V1Handler) ListActiveSessions(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	identity, err := middleware.GetIdentityFromContext(ctx)
@@ -354,7 +432,19 @@ func (h *V1Handler) ListActiveSessions(w http.ResponseWriter, r *http.Request) e
 	return WriteJSON(w, http.StatusOK, resp)
 }
 
-// RevokeOtherSessions signs out of every other device (keeps the active one).
+// RevokeOtherSessions godoc
+//
+//	@Summary		Revoke other sessions
+//	@Description	Revokes all other valid sessions for the authenticated identity on the current service surface.
+//	@Tags			auth
+//	@Produce		json
+//	@Success		200	{object}	MessageResponse
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/auth/customer/sessions [delete]
+//	@Router			/auth/merchant/sessions [delete]
+//	@Router			/auth/admin/sessions [delete]
 func (h *V1Handler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	identity, err := middleware.GetIdentityFromContext(ctx)
@@ -386,7 +476,22 @@ func (h *V1Handler) RevokeOtherSessions(w http.ResponseWriter, r *http.Request) 
 	)
 }
 
-// RevokeSessionByID logs out a specific session ID belonging to the user.
+// RevokeSessionByID godoc
+//
+//	@Summary		Revoke session by ID
+//	@Description	Revokes one session belonging to the authenticated identity.
+//	@Tags			auth
+//	@Produce		json
+//	@Param			id	path		string	true	"Session UUID"
+//	@Success		200	{object}	MessageResponse
+//	@Failure		400	{object}	apierror.APIError
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		404	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/auth/customer/sessions/{id} [delete]
+//	@Router			/auth/merchant/sessions/{id} [delete]
+//	@Router			/auth/admin/sessions/{id} [delete]
 func (h *V1Handler) RevokeSessionByID(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	identity, err := middleware.GetIdentityFromContext(ctx)

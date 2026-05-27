@@ -18,10 +18,14 @@ const (
 )
 
 type UserCredentialRegistrationRequest struct {
-	Name     string `json:"name"     validate:"required,max=255"`
-	Email    string `json:"email"    validate:"required,email,max=254"`
-	Password string `json:"password" validate:"required,min=8,max=72"`
-	RoleSlug string `json:"roleSlug" validate:"required"`
+	Name     string `json:"name"     validate:"required,max=255" example:"Jane Merchant"`
+	Email    string `json:"email"    validate:"required,email,max=254" example:"jane@example.com"`
+	Password string `json:"password" validate:"required,min=8,max=72" example:"correct-horse-battery-staple"`
+	RoleSlug string `json:"roleSlug" validate:"required" example:"merchant.owner"`
+}
+
+type IDResponse struct {
+	ID string `json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
 }
 
 type UserCredentialRegistrationResponse struct {
@@ -29,6 +33,23 @@ type UserCredentialRegistrationResponse struct {
 	User       db.RegisteredUser `json:"user"`
 }
 
+// UserCredentialRegistration godoc
+//
+//	@Summary		Create merchant user
+//	@Description	Creates a user account through the platform-admin surface.
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		UserCredentialRegistrationRequest	true	"User registration payload"
+//	@Success		201		{object}	IDResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		409		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/users/merchant [post]
 func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
@@ -77,6 +98,22 @@ func (h *V1Handler) UserCredentialRegistration(w http.ResponseWriter, r *http.Re
 	})
 }
 
+// PlatformUserCredentialRegistration godoc
+//
+//	@Summary		Create platform user
+//	@Description	Creates another platform-admin user. The first admin is bootstrapped during migration.
+//	@Tags			users
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		UserCredentialRegistrationRequest	true	"Platform user registration payload"
+//	@Success		201		{object}	UserCredentialRegistrationResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/users/platform [post]
 func (h *V1Handler) PlatformUserCredentialRegistration(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -156,6 +193,20 @@ func (h *V1Handler) PlatformUserCredentialRegistration(
 	return WriteJSON(w, resp.StatusCode, resp)
 }
 
+// CustomerCredentialRegistration godoc
+//
+//	@Summary		Register customer
+//	@Description	Creates a customer account and its individual organization.
+//	@Tags			customers
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		UserCredentialRegistrationRequest	true	"Customer registration payload"
+//	@Success		201		{object}	IDResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		409		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Router			/customer [post]
 func (h *V1Handler) CustomerCredentialRegistration(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
