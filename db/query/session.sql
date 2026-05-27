@@ -40,8 +40,7 @@ LIMIT
 UPDATE
     sessions
 SET
-    expires_at = sqlc.arg('expires_at')::TIMESTAMPTZ,
-    updated_at = NOW()
+    expires_at = sqlc.arg('expires_at')::TIMESTAMPTZ
 WHERE
     token = sqlc.arg('token')
     AND expires_at > NOW();

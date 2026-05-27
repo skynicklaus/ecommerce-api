@@ -253,8 +253,7 @@ const renewSession = `-- name: RenewSession :exec
 UPDATE
     sessions
 SET
-    expires_at = $1::TIMESTAMPTZ,
-    updated_at = NOW()
+    expires_at = $1::TIMESTAMPTZ
 WHERE
     token = $2
     AND expires_at > NOW()
