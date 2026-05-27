@@ -88,6 +88,50 @@ func TestUpsertInventoryHandler_CrossOrgVariantNotFound(t *testing.T) {
 	requireAPIErrorStatus(t, err, http.StatusNotFound)
 }
 
+func TestUpsertInventoryHandler_CrossOrgWarehouseNotFound(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+	otherTC := setupWarehouseInventoryHandlerTest(t)
+	otherWarehouse := createWarehouseFixtureForHandler(t, otherTC)
+
+	inventoryReq := UpsertInventoryRequest{
+		ProductVariantID: tc.productVariant.ID,
+		WarehouseID:      otherWarehouse.ID,
+		QuantityOnHand:   25,
+		IsActive:         new(true),
+	}
+	inventoryBody, err := json.Marshal(inventoryReq)
+	require.NoError(t, err)
+
+	inventoryHTTPReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodPut, "/v1/merchant/inventory", bytes.NewReader(inventoryBody)),
+		tc.organization,
+	)
+	inventoryRec := httptest.NewRecorder()
+	err = tc.handler.UpsertInventory(inventoryRec, inventoryHTTPReq)
+	requireAPIErrorStatus(t, err, http.StatusNotFound)
+}
+
+func TestUpsertInventoryHandler_ValidationError(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+
+	inventoryReq := UpsertInventoryRequest{
+		ProductVariantID: tc.productVariant.ID,
+		WarehouseID:      0,
+		QuantityOnHand:   -1,
+		IsActive:         nil,
+	}
+	inventoryBody, err := json.Marshal(inventoryReq)
+	require.NoError(t, err)
+
+	inventoryHTTPReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodPut, "/v1/merchant/inventory", bytes.NewReader(inventoryBody)),
+		tc.organization,
+	)
+	inventoryRec := httptest.NewRecorder()
+	err = tc.handler.UpsertInventory(inventoryRec, inventoryHTTPReq)
+	requireAPIErrorStatus(t, err, http.StatusUnprocessableEntity)
+}
+
 func TestListInventoryHandler_ByVariantID(t *testing.T) {
 	tc := setupWarehouseInventoryHandlerTest(t)
 	createdWarehouse := createWarehouseFixtureForHandler(t, tc)
@@ -111,6 +155,18 @@ func TestListInventoryHandler_ByVariantID(t *testing.T) {
 	require.Len(t, inventoryList.Data, 1)
 	require.Equal(t, tc.productVariant.ID, inventoryList.Data[0].ProductVariantID)
 	require.Equal(t, createdWarehouse.ID, inventoryList.Data[0].WarehouseID)
+}
+
+func TestListInventoryHandler_InvalidVariantID(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+
+	listReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodGet, "/v1/merchant/inventory?variantId=not-a-uuid", nil),
+		tc.organization,
+	)
+	listRec := httptest.NewRecorder()
+	err := tc.handler.ListInventory(listRec, listReq)
+	requireAPIErrorStatus(t, err, http.StatusBadRequest)
 }
 
 func TestListInventoryHandler_ByOrganization(t *testing.T) {
@@ -137,6 +193,60 @@ func TestListInventoryHandler_ByOrganization(t *testing.T) {
 	require.NotEmpty(t, inventoryList.Data[0].VariantSku)
 	require.NotEmpty(t, inventoryList.Data[0].VariantName)
 	require.Equal(t, createdWarehouse.Name, inventoryList.Data[0].WarehouseName)
+}
+
+func TestListInventoryHandler_ByOrganizationPagination(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+	firstWarehouse := createWarehouseFixtureForHandlerWithName(t, tc, "A Inventory Warehouse")
+	secondWarehouse := createWarehouseFixtureForHandlerWithName(t, tc, "B Inventory Warehouse")
+	upsertInventoryForHandler(t, tc, firstWarehouse.ID, tc.productVariant.ID, 25)
+	upsertInventoryForHandler(t, tc, secondWarehouse.ID, tc.productVariant.ID, 15)
+
+	firstPageReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodGet, "/v1/merchant/inventory?limit=1", nil),
+		tc.organization,
+	)
+	firstPageRec := httptest.NewRecorder()
+	err := tc.handler.ListInventory(firstPageRec, firstPageReq)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, firstPageRec.Code)
+
+	var firstPage ListInventoryResponse
+	require.NoError(t, json.Unmarshal(firstPageRec.Body.Bytes(), &firstPage))
+	require.Len(t, firstPage.Data, 1)
+	require.Equal(t, firstWarehouse.ID, firstPage.Data[0].WarehouseID)
+	require.NotNil(t, firstPage.NextCursor)
+
+	secondPageReq := requestWithOrganization(
+		httptest.NewRequest(
+			http.MethodGet,
+			"/v1/merchant/inventory?limit=1&cursor="+*firstPage.NextCursor,
+			nil,
+		),
+		tc.organization,
+	)
+	secondPageRec := httptest.NewRecorder()
+	err = tc.handler.ListInventory(secondPageRec, secondPageReq)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, secondPageRec.Code)
+
+	var secondPage ListInventoryResponse
+	require.NoError(t, json.Unmarshal(secondPageRec.Body.Bytes(), &secondPage))
+	require.Len(t, secondPage.Data, 1)
+	require.Equal(t, secondWarehouse.ID, secondPage.Data[0].WarehouseID)
+	require.Nil(t, secondPage.NextCursor)
+}
+
+func TestListInventoryHandler_InvalidCursor(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+
+	listReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodGet, "/v1/merchant/inventory?cursor=not-a-cursor", nil),
+		tc.organization,
+	)
+	listRec := httptest.NewRecorder()
+	err := tc.handler.ListInventory(listRec, listReq)
+	requireAPIErrorStatus(t, err, http.StatusBadRequest)
 }
 
 func TestListProductInventoryHandler_Integration(t *testing.T) {
@@ -166,4 +276,21 @@ func TestListProductInventoryHandler_Integration(t *testing.T) {
 	require.NoError(t, json.Unmarshal(productInventoryRec.Body.Bytes(), &productInventory))
 	require.Len(t, productInventory.Data, 1)
 	require.Equal(t, tc.productVariant.ID, productInventory.Data[0].ProductVariantID)
+}
+
+func TestListProductInventoryHandler_InvalidProductID(t *testing.T) {
+	tc := setupWarehouseInventoryHandlerTest(t)
+
+	productInventoryReq := requestWithOrganization(
+		httptest.NewRequest(http.MethodGet, "/v1/merchant/products/not-a-uuid/inventory", nil),
+		tc.organization,
+	)
+	productRouteCtx := chi.NewRouteContext()
+	productRouteCtx.URLParams.Add("id", "not-a-uuid")
+	productInventoryReq = productInventoryReq.WithContext(
+		context.WithValue(productInventoryReq.Context(), chi.RouteCtxKey, productRouteCtx),
+	)
+	productInventoryRec := httptest.NewRecorder()
+	err := tc.handler.ListProductInventory(productInventoryRec, productInventoryReq)
+	requireAPIErrorStatus(t, err, http.StatusBadRequest)
 }
