@@ -146,7 +146,13 @@ func TestInventoryScopedQueries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	organizationRows, err := testStore.ListInventoryByOrganization(t.Context(), organization.ID)
+	organizationRows, err := testStore.ListInventoryByOrganization(
+		t.Context(),
+		db.ListInventoryByOrganizationParams{
+			OrganizationID: organization.ID,
+			PageLimit:      20,
+		},
+	)
 	require.NoError(t, err)
 	require.Len(t, organizationRows, 1)
 
