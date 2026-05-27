@@ -47,12 +47,32 @@ type CreateProductRequest struct {
 	Name          string                `json:"name"          validate:"required"`
 	Slug          string                `json:"slug"          validate:"required"`
 	CategoryID    uuid.UUID             `json:"categoryId"    validate:"required"`
-	Description   json.RawMessage       `json:"description"   validate:"required"`
-	Specification json.RawMessage       `json:"specification" validate:"required"`
+	Description   json.RawMessage       `json:"description"   validate:"required" swaggertype:"object"`
+	Specification json.RawMessage       `json:"specification" validate:"required" swaggertype:"object"`
 	Assets        []ProductAssetRequest `json:"assets"`
 	Variants      []VariantRequest      `json:"variants"      validate:"required,min=1,dive"`
 }
 
+// CreateProduct godoc
+//
+//	@Summary		Create product
+//	@Description	Creates a draft product with variants and previously pre-uploaded assets. Supports Idempotency-Key for safe retries.
+//	@Tags			products
+//	@Accept			json
+//	@Produce		json
+//	@Param			Idempotency-Key	header		string					false	"Optional idempotency key for safe retries"
+//	@Param			request			body		CreateProductRequest	true	"Product payload"
+//	@Success		201				{object}	db.CreateProductTxResults
+//	@Success		200				{object}	db.CreateProductTxResults	"Idempotent replay result"
+//	@Failure		400				{object}	apierror.APIError
+//	@Failure		401				{object}	apierror.APIError
+//	@Failure		403				{object}	apierror.APIError
+//	@Failure		409				{object}	apierror.APIError
+//	@Failure		413				{object}	apierror.APIError
+//	@Failure		422				{object}	apierror.APIError
+//	@Failure		500				{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/products [post]
 func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // idempotency + S3 copies + DB tx
 	w http.ResponseWriter,
 	r *http.Request,
@@ -429,6 +449,24 @@ type UpdateProductStatusResponse struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+// UpdateProductStatus godoc
+//
+//	@Summary		Update product status
+//	@Description	Changes a merchant-owned product status.
+//	@Tags			products
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string						true	"Product UUID"
+//	@Param			request	body		UpdateProductStatusRequest	true	"Status payload"
+//	@Success		200		{object}	UpdateProductStatusResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		404		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/products/{id}/status [patch]
 func (h *V1Handler) UpdateProductStatus(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -541,9 +579,9 @@ type ProductDetailsResponse struct {
 	CategoryID     uuid.UUID         `json:"categoryId"`
 	Name           string            `json:"name"`
 	Slug           string            `json:"slug"`
-	Description    json.RawMessage   `json:"description"`
+	Description    json.RawMessage   `json:"description" swaggertype:"object"`
 	Status         string            `json:"status"`
-	Specification  json.RawMessage   `json:"specification"`
+	Specification  json.RawMessage   `json:"specification" swaggertype:"object"`
 	IsFeatured     bool              `json:"isFeatured"`
 	CreatedAt      time.Time         `json:"createdAt"`
 	UpdatedAt      time.Time         `json:"updatedAt"`
@@ -551,6 +589,19 @@ type ProductDetailsResponse struct {
 	Variants       []VariantResponse `json:"variants"`
 }
 
+// GetActiveProductDetails godoc
+//
+//	@Summary		Get active product details
+//	@Description	Returns buyer-visible details for an active product by UUID or slug within an organization.
+//	@Tags			storefront
+//	@Produce		json
+//	@Param			org_id		path		string	true	"Organization UUID"
+//	@Param			slug_or_id	path		string	true	"Product slug or UUID"
+//	@Success		200			{object}	ProductDetailsResponse
+//	@Failure		400			{object}	apierror.APIError
+//	@Failure		404			{object}	apierror.APIError
+//	@Failure		500			{object}	apierror.APIError
+//	@Router			/products/{org_id}/{slug_or_id} [get]
 func (h *V1Handler) GetActiveProductDetails( //nolint:funlen
 	w http.ResponseWriter,
 	r *http.Request,
@@ -771,6 +822,19 @@ func buildProductResponseList(
 	return resList
 }
 
+// ListActiveProducts godoc
+//
+//	@Summary		List active products
+//	@Description	Lists buyer-visible active products across merchants using cursor pagination.
+//	@Tags			storefront
+//	@Produce		json
+//	@Param			limit	query		int		false	"Page size"	minimum(1)	maximum(100)	default(20)
+//	@Param			cursor	query		string	false	"Opaque cursor returned from the previous page"
+//	@Success		200		{object}	ListProductsResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Router			/products [get]
+//
 //nolint:funlen
 func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
@@ -1099,6 +1163,22 @@ func (h *V1Handler) cacheIdempotentResult(
 	}
 }
 
+// ListMerchantProducts godoc
+//
+//	@Summary		List merchant products
+//	@Description	Lists products belonging to the authenticated merchant organization.
+//	@Tags			products
+//	@Produce		json
+//	@Param			status	query		string	false	"Comma-separated status filter"	Enums(active,draft,archived,suspended)
+//	@Param			limit	query		int		false	"Page size"						minimum(1)	maximum(100)	default(20)
+//	@Param			cursor	query		string	false	"Opaque cursor returned from the previous page"
+//	@Success		200		{object}	ListProductsResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/products [get]
 func (h *V1Handler) ListMerchantProducts( //nolint:funlen
 	w http.ResponseWriter,
 	r *http.Request,
@@ -1252,6 +1332,21 @@ func (h *V1Handler) ListMerchantProducts( //nolint:funlen
 	})
 }
 
+// GetMerchantProductDetails godoc
+//
+//	@Summary		Get merchant product details
+//	@Description	Returns full details for a merchant-owned product regardless of status.
+//	@Tags			products
+//	@Produce		json
+//	@Param			id	path		string	true	"Product UUID"
+//	@Success		200	{object}	ProductDetailsResponse
+//	@Failure		400	{object}	apierror.APIError
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		403	{object}	apierror.APIError
+//	@Failure		404	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/products/{id} [get]
 func (h *V1Handler) GetMerchantProductDetails( //nolint:funlen
 	w http.ResponseWriter,
 	r *http.Request,
@@ -1414,6 +1509,26 @@ func (h *V1Handler) resolveAssetOrToken(
 	return h.resolvePendingUpload(ctx, token, organizationID)
 }
 
+// UpdateProduct godoc
+//
+//	@Summary		Update product
+//	@Description	Replaces a merchant-owned product's details, variants, and asset associations.
+//	@Tags			products
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		string					true	"Product UUID"
+//	@Param			request	body		CreateProductRequest	true	"Replacement product payload"
+//	@Success		200		{object}	db.CreateProductTxResults
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		404		{object}	apierror.APIError
+//	@Failure		413		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/products/{id} [put]
+//
 //nolint:gocognit,funlen
 func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
@@ -1624,6 +1739,20 @@ func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error 
 	return WriteJSON(w, http.StatusOK, result)
 }
 
+// DeleteProduct godoc
+//
+//	@Summary		Delete product
+//	@Description	Deletes a merchant-owned product and schedules associated asset cleanup.
+//	@Tags			products
+//	@Param			id	path	string	true	"Product UUID"
+//	@Success		204	"No content"
+//	@Failure		400	{object}	apierror.APIError
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		403	{object}	apierror.APIError
+//	@Failure		404	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/products/{id} [delete]
 func (h *V1Handler) DeleteProduct(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
