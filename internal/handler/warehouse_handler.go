@@ -52,6 +52,22 @@ type ListWarehousesResponse struct {
 	Data []WarehouseResponse `json:"data"`
 }
 
+// CreateWarehouse godoc
+//
+//	@Summary		Create warehouse
+//	@Description	Creates a merchant warehouse and its warehouse address.
+//	@Tags			warehouses
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		CreateWarehouseRequest	true	"Warehouse payload"
+//	@Success		201		{object}	WarehouseResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/warehouses [post]
 func (h *V1Handler) CreateWarehouse(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -79,6 +95,18 @@ func (h *V1Handler) CreateWarehouse(w http.ResponseWriter, r *http.Request) erro
 	return WriteJSON(w, http.StatusCreated, warehouseTxResponse(result))
 }
 
+// ListWarehouses godoc
+//
+//	@Summary		List warehouses
+//	@Description	Lists warehouses for the active merchant organization.
+//	@Tags			warehouses
+//	@Produce		json
+//	@Success		200	{object}	ListWarehousesResponse
+//	@Failure		401	{object}	apierror.APIError
+//	@Failure		403	{object}	apierror.APIError
+//	@Failure		500	{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/warehouses [get]
 func (h *V1Handler) ListWarehouses(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
@@ -105,6 +133,24 @@ type UpdateWarehouseRequest struct {
 	Address  WarehouseAddressRequest `json:"address"  validate:"required"`
 }
 
+// UpdateWarehouse godoc
+//
+//	@Summary		Update warehouse
+//	@Description	Updates a merchant warehouse and its warehouse address.
+//	@Tags			warehouses
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int						true	"Warehouse ID"
+//	@Param			request	body		UpdateWarehouseRequest	true	"Warehouse payload"
+//	@Success		200		{object}	WarehouseResponse
+//	@Failure		400		{object}	apierror.APIError
+//	@Failure		401		{object}	apierror.APIError
+//	@Failure		403		{object}	apierror.APIError
+//	@Failure		404		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
+//	@Failure		500		{object}	apierror.APIError
+//	@Security		Bearer
+//	@Router			/merchant/warehouses/{id} [put]
 func (h *V1Handler) UpdateWarehouse(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	organization, ctxErr := organizationFromCtx(ctx)
