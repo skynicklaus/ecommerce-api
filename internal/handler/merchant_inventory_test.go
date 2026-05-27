@@ -197,11 +197,12 @@ func createWarehouseInventoryFixture(
 	t.Helper()
 
 	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-		Name:     "merchant-" + uuid.NewString(),
-		Slug:     "merchant-" + uuid.NewString(),
-		Status:   string(util.OrganizationStatusActive),
-		Type:     string(util.OrganizationTypeMerchant),
-		Metadata: []byte("{}"),
+		Name:       "merchant-" + uuid.NewString(),
+		Slug:       "merchant-" + uuid.NewString(),
+		Status:     string(util.OrganizationStatusActive),
+		Type:       string(util.OrganizationTypeMerchant),
+		Capability: string(util.OrganizationCapabilitySeller),
+		Metadata:   []byte("{}"),
 	})
 	require.NoError(t, err)
 

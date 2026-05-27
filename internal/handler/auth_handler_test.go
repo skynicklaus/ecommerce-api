@@ -83,16 +83,21 @@ func TestAuthFlows_Integration(t *testing.T) {
 
 	// Seed Organization
 	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-		Name:     "Auth Test Merchant Org",
-		Type:     "merchant",
-		Slug:     "auth.merchant-" + uuid.New().String()[:8],
-		Status:   "active",
-		ParentID: nil,
-		Metadata: nil,
+		Name:       "Auth Test Merchant Org",
+		Type:       "merchant",
+		Capability: string(util.OrganizationCapabilitySeller),
+		Slug:       "auth.merchant-" + uuid.New().String()[:8],
+		Status:     string(util.OrganizationStatusActive),
+		ParentID:   nil,
+		Metadata:   nil,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = connPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", org.ID)
+		_, _ = connPool.Exec(
+			context.Background(),
+			"DELETE FROM organizations WHERE id = $1",
+			org.ID,
+		)
 	})
 
 	pass := "supersecure123"
@@ -104,7 +109,11 @@ func TestAuthFlows_Integration(t *testing.T) {
 	custIdent, err := store.CreateIdentity(ctx, string(util.IdentityCustomer))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", custIdent.ID)
+		_, _ = connPool.Exec(
+			context.Background(),
+			"DELETE FROM identities WHERE id = $1",
+			custIdent.ID,
+		)
 	})
 	customer, err := store.CreateCustomer(ctx, db.CreateCustomerParams{
 		IdentityID: custIdent.ID,
@@ -131,7 +140,11 @@ func TestAuthFlows_Integration(t *testing.T) {
 	merchIdent, err := store.CreateIdentity(ctx, string(util.IdentityUser))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", merchIdent.ID)
+		_, _ = connPool.Exec(
+			context.Background(),
+			"DELETE FROM identities WHERE id = $1",
+			merchIdent.ID,
+		)
 	})
 	merchUser, err := store.CreateUser(ctx, db.CreateUserParams{
 		IdentityID: merchIdent.ID,
@@ -436,7 +449,11 @@ func TestAdminLoginFlow_Integration(t *testing.T) {
 	adminIdent, err := store.CreateIdentity(ctx, string(util.IdentityUser))
 	require.NoError(t, err)
 	t.Cleanup(func() {
-		_, _ = connPool.Exec(context.Background(), "DELETE FROM identities WHERE id = $1", adminIdent.ID)
+		_, _ = connPool.Exec(
+			context.Background(),
+			"DELETE FROM identities WHERE id = $1",
+			adminIdent.ID,
+		)
 	})
 	adminUser, err := store.CreateUser(ctx, db.CreateUserParams{
 		IdentityID: adminIdent.ID,

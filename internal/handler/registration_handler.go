@@ -266,12 +266,13 @@ func registerNewCustomer(
 			IDToken:               nil,
 		},
 		CreateOrganizationParams: db.CreateOrganizationParams{
-			ParentID: nil,
-			Name:     req.Name,
-			Slug:     slugifyEmail(req.Email),
-			Status:   string(util.OrganizationStatusActive),
-			Type:     string(util.OrganizationTypeIndividual),
-			Metadata: []byte("{}"),
+			ParentID:   nil,
+			Name:       req.Name,
+			Slug:       slugifyEmail(req.Email),
+			Status:     string(util.OrganizationStatusActive),
+			Type:       string(util.OrganizationTypeIndividual),
+			Capability: string(util.OrganizationCapabilityBuyer),
+			Metadata:   []byte("{}"),
 		},
 	}
 

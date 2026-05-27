@@ -19,7 +19,7 @@ type CreateOrganizationRequest struct {
 	ParentID   *uuid.UUID      `json:"parentId"   validate:"omitempty"`
 	Name       string          `json:"name"       validate:"required,max=255"`
 	Slug       string          `json:"slug"       validate:"required"`
-	Type       string          `json:"type"       validate:"required,oneof=merchant company"`
+	Type       string          `json:"type"       validate:"required,oneof=merchant"`
 	Status     string          `json:"status"     validate:"required,oneof=pending active suspended"`
 	Metadata   json.RawMessage `json:"metadata"   validate:"required"`
 	RoleSlug   string          `json:"roleSlug"   validate:"required"`
@@ -57,6 +57,7 @@ func (h *V1Handler) CreateOrganization(w http.ResponseWriter, r *http.Request) e
 		Slug:                 req.Slug,
 		Type:                 req.Type,
 		Status:               string(util.OrganizationStatusPending),
+		Capability:           string(util.OrganizationCapabilitySeller),
 		Metadata:             []byte(req.Metadata),
 		RoleID:               role.ID,
 		RoleOrganizationType: role.OrganizationType,

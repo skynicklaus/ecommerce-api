@@ -19,21 +19,23 @@ INSERT INTO
         slug,
         "status",
         "type",
+        capability,
         metadata
     )
 VALUES
-    ($1, $2, $3, $4, $5, $6)
+    ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
-    id, parent_id, name, slug, status, type, logo, metadata, created_at
+    id, parent_id, name, slug, status, type, capability, logo, metadata, created_at
 `
 
 type CreateOrganizationParams struct {
-	ParentID *uuid.UUID `json:"parent_id"`
-	Name     string     `json:"name"`
-	Slug     string     `json:"slug"`
-	Status   string     `json:"status"`
-	Type     string     `json:"type"`
-	Metadata []byte     `json:"metadata"`
+	ParentID   *uuid.UUID `json:"parent_id"`
+	Name       string     `json:"name"`
+	Slug       string     `json:"slug"`
+	Status     string     `json:"status"`
+	Type       string     `json:"type"`
+	Capability string     `json:"capability"`
+	Metadata   []byte     `json:"metadata"`
 }
 
 func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganizationParams) (Organization, error) {
@@ -43,6 +45,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		arg.Slug,
 		arg.Status,
 		arg.Type,
+		arg.Capability,
 		arg.Metadata,
 	)
 	var i Organization
@@ -53,6 +56,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 		&i.Slug,
 		&i.Status,
 		&i.Type,
+		&i.Capability,
 		&i.Logo,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -62,15 +66,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg CreateOrganization
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
 SELECT
-    id,
-    parent_id,
-    name,
-    slug,
-    "status",
-    "type",
-    logo,
-    metadata,
-    created_at
+    id, parent_id, name, slug, status, type, capability, logo, metadata, created_at
 FROM
     organizations
 WHERE
@@ -91,6 +87,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organi
 		&i.Slug,
 		&i.Status,
 		&i.Type,
+		&i.Capability,
 		&i.Logo,
 		&i.Metadata,
 		&i.CreatedAt,
@@ -100,15 +97,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organi
 
 const getOrganizationBySlug = `-- name: GetOrganizationBySlug :one
 SELECT
-    id,
-    parent_id,
-    name,
-    slug,
-    "status",
-    "type",
-    logo,
-    metadata,
-    created_at
+    id, parent_id, name, slug, status, type, capability, logo, metadata, created_at
 FROM
     organizations
 WHERE
@@ -129,6 +118,7 @@ func (q *Queries) GetOrganizationBySlug(ctx context.Context, slug string) (Organ
 		&i.Slug,
 		&i.Status,
 		&i.Type,
+		&i.Capability,
 		&i.Logo,
 		&i.Metadata,
 		&i.CreatedAt,

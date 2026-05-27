@@ -44,7 +44,8 @@ func (store *SQLStore) CustomerRegistrationTx(
 
 		if !slices.Contains(customerOrganizationTypes, arg.RoleOrganizationType) ||
 			!slices.Contains(customerOrganizationTypes, arg.Type) ||
-			arg.RoleOrganizationType != arg.Type {
+			arg.RoleOrganizationType != arg.Type ||
+			arg.Capability != string(util.OrganizationCapabilityBuyer) {
 			return ErrMismatchOrganizationType
 		}
 

@@ -70,9 +70,9 @@ VALUES
     ) ON CONFLICT DO NOTHING;
 
 INSERT INTO
-    organizations (name, slug, "type", STATUS)
+    organizations (name, slug, "type", capability, STATUS)
 VALUES
-    ('Platform', 'platform', 'platform', 'active');
+    ('Platform', 'platform', 'platform', 'platform', 'active');
 
 -- +goose StatementEnd
 -- +goose Down

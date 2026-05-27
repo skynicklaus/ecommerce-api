@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+
+	"github.com/skynicklaus/ecommerce-api/util"
 )
 
 type CreateOrganizationTxRequest struct {
@@ -13,6 +15,7 @@ type CreateOrganizationTxRequest struct {
 	Slug                 string
 	Type                 string
 	Status               string
+	Capability           string
 	Metadata             []byte
 	RoleID               int16
 	RoleOrganizationType string
@@ -32,17 +35,18 @@ func (store *SQLStore) CreateOrganizationTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		if arg.Type != arg.RoleOrganizationType {
+		if arg.Type != arg.RoleOrganizationType || !validCapabilityForOrganizationType(arg.Type, arg.Capability) {
 			return ErrMismatchOrganizationType
 		}
 
 		result.Organization, err = q.CreateOrganization(ctx, CreateOrganizationParams{
-			ParentID: arg.ParentID,
-			Name:     arg.Name,
-			Slug:     arg.Slug,
-			Type:     arg.Type,
-			Status:   arg.Status,
-			Metadata: arg.Metadata,
+			ParentID:   arg.ParentID,
+			Name:       arg.Name,
+			Slug:       arg.Slug,
+			Type:       arg.Type,
+			Status:     arg.Status,
+			Capability: arg.Capability,
+			Metadata:   arg.Metadata,
 		})
 		if err != nil {
 			return err
@@ -69,4 +73,17 @@ func (store *SQLStore) CreateOrganizationTx(
 	})
 
 	return result, err
+}
+
+func validCapabilityForOrganizationType(organizationType, capability string) bool {
+	switch organizationType {
+	case string(util.OrganizationTypePlatform):
+		return capability == string(util.OrganizationCapabilityPlatform)
+	case string(util.OrganizationTypeMerchant):
+		return capability == string(util.OrganizationCapabilitySeller)
+	case string(util.OrganizationTypeIndividual), string(util.OrganizationTypeCompany):
+		return capability == string(util.OrganizationCapabilityBuyer)
+	default:
+		return false
+	}
 }

@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     slug TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "type" TEXT NOT NULL,
+    capability TEXT NOT NULL,
     logo TEXT,
     metadata JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -144,10 +145,24 @@ CREATE TABLE IF NOT EXISTS organizations (
         )
     ),
     CONSTRAINT check_organization_status CHECK (
-        STATUS IN (
+        "status" IN (
             'active',
             'pending',
             'suspended'
+        )
+    ),
+    CONSTRAINT check_organization_capability CHECK (
+        (
+            "type" = 'platform'
+            AND capability = 'platform'
+        )
+        OR (
+            "type" = 'merchant'
+            AND capability = 'seller'
+        )
+        OR (
+            "type" IN ('individual', 'company')
+            AND capability = 'buyer'
         )
     )
 );
@@ -285,8 +300,8 @@ SET
 -- +goose StatementEnd
 -- +goose Down
 -- +goose StatementBegin
-ALTER TABLE sessions
-    DROP CONSTRAINT fk_sessions_active_organization_id;
+ALTER TABLE
+    sessions DROP CONSTRAINT fk_sessions_active_organization_id;
 
 DROP TRIGGER IF EXISTS trg_protect_platform_org ON organizations;
 

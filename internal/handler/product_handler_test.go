@@ -74,12 +74,13 @@ func TestCreateProduct_Integration(t *testing.T) {
 
 	// 4. Seed an Organization
 	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-		Name:     "Test E2E Org",
-		Type:     "merchant",
-		Slug:     "merchant.e2e-org-" + uuid.New().String()[:8],
-		Status:   "active",
-		ParentID: nil,
-		Metadata: nil,
+		Name:       "Test E2E Org",
+		Type:       "merchant",
+		Capability: string(util.OrganizationCapabilitySeller),
+		Slug:       "merchant.e2e-org-" + uuid.New().String()[:8],
+		Status:     string(util.OrganizationStatusActive),
+		ParentID:   nil,
+		Metadata:   nil,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -205,7 +206,9 @@ func TestCreateProduct_Integration(t *testing.T) {
 		createdProductSlug = txResult.Product.Slug
 
 		// Publish the product so subsequent storefront reads can find it.
-		publishBody, err := json.Marshal(UpdateProductStatusRequest{Status: "active"})
+		publishBody, err := json.Marshal(
+			UpdateProductStatusRequest{Status: string(util.OrganizationStatusActive)},
+		)
 		require.NoError(t, err)
 
 		publishReq := httptest.NewRequest(
@@ -234,7 +237,7 @@ func TestCreateProduct_Integration(t *testing.T) {
 		var publishResp UpdateProductStatusResponse
 		err = json.Unmarshal(publishRec.Body.Bytes(), &publishResp)
 		require.NoError(t, err)
-		require.Equal(t, "active", publishResp.Status)
+		require.Equal(t, string(util.OrganizationStatusActive), publishResp.Status)
 
 		// Poll for fire-and-forget background S3/Redis deletions to execute
 		require.Eventually(t, func() bool {
@@ -447,7 +450,11 @@ func TestCreateProduct_Integration(t *testing.T) {
 			bytes.NewReader(dupeSlugBodyBytes),
 		)
 		reqDupeSlug.Header.Set("Idempotency-Key", "idem-key-dupe-slug-"+uuid.New().String())
-		reqDupeSlugCtx := context.WithValue(reqDupeSlug.Context(), middleware.OrganizationContextKey{}, org)
+		reqDupeSlugCtx := context.WithValue(
+			reqDupeSlug.Context(),
+			middleware.OrganizationContextKey{},
+			org,
+		)
 		reqDupeSlug = reqDupeSlug.WithContext(reqDupeSlugCtx)
 
 		recDupeSlug := httptest.NewRecorder()
@@ -469,7 +476,11 @@ func TestCreateProduct_Integration(t *testing.T) {
 			bytes.NewReader(differentBodyBytes),
 		)
 		reqMismatch.Header.Set("Idempotency-Key", idemKey)
-		reqMismatchCtx := context.WithValue(reqMismatch.Context(), middleware.OrganizationContextKey{}, org)
+		reqMismatchCtx := context.WithValue(
+			reqMismatch.Context(),
+			middleware.OrganizationContextKey{},
+			org,
+		)
 		reqMismatch = reqMismatch.WithContext(reqMismatchCtx)
 
 		recMismatch := httptest.NewRecorder()
@@ -662,10 +673,11 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 
 	// Seed Organization
 	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-		Name:   "Merchant E2E Org",
-		Type:   "merchant",
-		Slug:   "merchant.crud-org-" + uuid.New().String()[:8],
-		Status: "active",
+		Name:       "Merchant E2E Org",
+		Type:       "merchant",
+		Capability: string(util.OrganizationCapabilitySeller),
+		Slug:       "merchant.crud-org-" + uuid.New().String()[:8],
+		Status:     string(util.OrganizationStatusActive),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -919,10 +931,11 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 
 	t.Run("cross_org_update_rejected", func(t *testing.T) {
 		otherOrg, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
-			Name:   "Other Merchant Org",
-			Type:   "merchant",
-			Slug:   "merchant.other-org-" + uuid.New().String()[:8],
-			Status: "active",
+			Name:       "Other Merchant Org",
+			Type:       "merchant",
+			Capability: string(util.OrganizationCapabilitySeller),
+			Slug:       "merchant.other-org-" + uuid.New().String()[:8],
+			Status:     string(util.OrganizationStatusActive),
 		})
 		require.NoError(t, err)
 		t.Cleanup(func() {

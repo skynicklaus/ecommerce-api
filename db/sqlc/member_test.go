@@ -53,11 +53,12 @@ func TestCountPlatformAdmins(t *testing.T) {
 	require.NoError(t, err)
 
 	orgArg := db.CreateOrganizationParams{
-		Name:     "Platform Org " + util.GetRandomString(t, 6),
-		Slug:     "platform-org-" + util.GetRandomString(t, 6),
-		Type:     string(util.OrganizationTypePlatform),
-		Status:   string(util.OrganizationStatusActive),
-		Metadata: []byte(`{}`),
+		Name:       "Platform Org " + util.GetRandomString(t, 6),
+		Slug:       "platform-org-" + util.GetRandomString(t, 6),
+		Type:       string(util.OrganizationTypePlatform),
+		Capability: string(util.OrganizationCapabilityPlatform),
+		Status:     string(util.OrganizationStatusActive),
+		Metadata:   []byte(`{}`),
 	}
 	org, err := testStore.CreateOrganization(t.Context(), orgArg)
 	require.NoError(t, err)

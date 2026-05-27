@@ -49,9 +49,10 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 						util.GetRandomString(t, 8),
 						util.GetRandomString(t, 8),
 					),
-					Status:   util.GetRandomOrganizationStatus(t),
-					Type:     string(util.OrganizationTypeIndividual),
-					Metadata: util.GetRandomDescriptionJSON(t, 10),
+					Status:     util.GetRandomOrganizationStatus(t),
+					Type:       string(util.OrganizationTypeIndividual),
+					Capability: string(util.OrganizationCapabilityBuyer),
+					Metadata:   util.GetRandomDescriptionJSON(t, 10),
 				},
 			},
 			wantErr:  false,
@@ -114,9 +115,10 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 						string(util.OrganizationTypeIndividual),
 						util.GetRandomString(t, 8),
 					),
-					Status:   util.GetRandomOrganizationStatus(t),
-					Type:     string(util.OrganizationTypeIndividual),
-					Metadata: util.GetRandomDescriptionJSON(t, 10),
+					Status:     util.GetRandomOrganizationStatus(t),
+					Type:       string(util.OrganizationTypeIndividual),
+					Capability: string(util.OrganizationCapabilityBuyer),
+					Metadata:   util.GetRandomDescriptionJSON(t, 10),
 				},
 			},
 			wantErr:  false,
@@ -162,7 +164,8 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 			arg: db.CustomerRegistrationTxParams{
 				RoleOrganizationType: string(util.OrganizationTypeIndividual),
 				CreateOrganizationParams: db.CreateOrganizationParams{
-					Type: string(util.OrganizationTypeMerchant),
+					Type:       string(util.OrganizationTypeMerchant),
+					Capability: string(util.OrganizationCapabilitySeller),
 				},
 			},
 			wantErr:  true,
@@ -180,7 +183,8 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 			arg: db.CustomerRegistrationTxParams{
 				RoleOrganizationType: string(util.OrganizationTypeMerchant),
 				CreateOrganizationParams: db.CreateOrganizationParams{
-					Type: string(util.OrganizationTypeIndividual),
+					Type:       string(util.OrganizationTypeIndividual),
+					Capability: string(util.OrganizationCapabilityBuyer),
 				},
 			},
 			wantErr:  true,
@@ -198,7 +202,8 @@ func TestSQLStore_CustomerRegistrationTx(t *testing.T) {
 			arg: db.CustomerRegistrationTxParams{
 				RoleOrganizationType: string(util.OrganizationTypeIndividual),
 				CreateOrganizationParams: db.CreateOrganizationParams{
-					Type: string(util.OrganizationTypeCompany),
+					Type:       string(util.OrganizationTypeCompany),
+					Capability: string(util.OrganizationCapabilitySeller),
 				},
 			},
 			wantErr:  true,

@@ -6,24 +6,17 @@ INSERT INTO
         slug,
         "status",
         "type",
+        capability,
         metadata
     )
 VALUES
-    ($1, $2, $3, $4, $5, $6)
+    ($1, $2, $3, $4, $5, $6, $7)
 RETURNING
     *;
 
 -- name: GetOrganizationByID :one
 SELECT
-    id,
-    parent_id,
-    name,
-    slug,
-    "status",
-    "type",
-    logo,
-    metadata,
-    created_at
+    *
 FROM
     organizations
 WHERE
@@ -35,15 +28,7 @@ LIMIT
 
 -- name: GetOrganizationBySlug :one
 SELECT
-    id,
-    parent_id,
-    name,
-    slug,
-    "status",
-    "type",
-    logo,
-    metadata,
-    created_at
+    *
 FROM
     organizations
 WHERE

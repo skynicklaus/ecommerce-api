@@ -49,7 +49,7 @@ if [ -n "$EXISTING_ORG" ]; then
   ORG_ID="$EXISTING_ORG"
   echo "    Org already exists: $ORG_ID"
 else
-  ORG_ID=$(psql_exec "INSERT INTO organizations (name, slug, type, status, metadata) VALUES ('Demo Merchant', 'demo-merchant', 'merchant', 'active', '{}') RETURNING id;")
+  ORG_ID=$(psql_exec "INSERT INTO organizations (name, slug, type, capability, status, metadata) VALUES ('Demo Merchant', 'demo-merchant', 'merchant', 'seller', 'active', '{}') RETURNING id;")
   echo "    Created org: $ORG_ID"
 fi
 

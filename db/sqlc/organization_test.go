@@ -42,11 +42,12 @@ func createRandomOrganization(t *testing.T) db.Organization {
 
 	//nolint:exhaustruct // parent oragnization
 	arg := db.CreateOrganizationParams{
-		Name:     util.GetRandomString(t, 8),
-		Type:     organizationType,
-		Slug:     slug,
-		Metadata: metadata,
-		Status:   organizationStatus,
+		Name:       util.GetRandomString(t, 8),
+		Type:       organizationType,
+		Capability: util.GetOrganizationCapabilityForType(t, organizationType),
+		Slug:       slug,
+		Metadata:   metadata,
+		Status:     organizationStatus,
 	}
 
 	organization, err := testStore.CreateOrganization(t.Context(), arg)
@@ -100,12 +101,13 @@ func TestCreateSubOrganization(t *testing.T) {
 	require.NotEmpty(t, organizationStatus)
 
 	arg := db.CreateOrganizationParams{
-		ParentID: &parentOrganization.ID,
-		Name:     util.GetRandomString(t, 8),
-		Type:     organizationType,
-		Slug:     slug,
-		Metadata: metadata,
-		Status:   organizationStatus,
+		ParentID:   &parentOrganization.ID,
+		Name:       util.GetRandomString(t, 8),
+		Type:       organizationType,
+		Capability: util.GetOrganizationCapabilityForType(t, organizationType),
+		Slug:       slug,
+		Metadata:   metadata,
+		Status:     organizationStatus,
 	}
 
 	chilldOrganization, err := testStore.CreateOrganization(t.Context(), arg)
