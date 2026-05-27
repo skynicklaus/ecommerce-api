@@ -186,13 +186,44 @@ FROM
     JOIN products p ON p.id = pv.product_id
     JOIN warehouses w ON w.id = i.warehouse_id
 WHERE
-    pv.organization_id = $1
-    AND w.organization_id = $1
+    pv.organization_id = $1::UUID
+    AND w.organization_id = $1::UUID
+    AND (
+        NOT $2::BOOL
+        OR (
+            p.name,
+            pv.name,
+            w.name,
+            i.product_variant_id,
+            i.warehouse_id
+        ) > (
+            $3::TEXT,
+            $4::TEXT,
+            $5::TEXT,
+            $6::UUID,
+            $7::BIGINT
+        )
+    )
 ORDER BY
     p.name,
     pv.name,
-    w.name
+    w.name,
+    i.product_variant_id,
+    i.warehouse_id
+LIMIT
+    $8::INT
 `
+
+type ListInventoryByOrganizationParams struct {
+	OrganizationID        uuid.UUID `json:"organization_id"`
+	HasCursor             bool      `json:"has_cursor"`
+	AfterProductName      string    `json:"after_product_name"`
+	AfterVariantName      string    `json:"after_variant_name"`
+	AfterWarehouseName    string    `json:"after_warehouse_name"`
+	AfterProductVariantID uuid.UUID `json:"after_product_variant_id"`
+	AfterWarehouseID      int64     `json:"after_warehouse_id"`
+	PageLimit             int32     `json:"page_limit"`
+}
 
 type ListInventoryByOrganizationRow struct {
 	ProductVariantID   uuid.UUID `json:"product_variant_id"`
@@ -209,8 +240,17 @@ type ListInventoryByOrganizationRow struct {
 	WarehouseName      string    `json:"warehouse_name"`
 }
 
-func (q *Queries) ListInventoryByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListInventoryByOrganizationRow, error) {
-	rows, err := q.db.Query(ctx, listInventoryByOrganization, organizationID)
+func (q *Queries) ListInventoryByOrganization(ctx context.Context, arg ListInventoryByOrganizationParams) ([]ListInventoryByOrganizationRow, error) {
+	rows, err := q.db.Query(ctx, listInventoryByOrganization,
+		arg.OrganizationID,
+		arg.HasCursor,
+		arg.AfterProductName,
+		arg.AfterVariantName,
+		arg.AfterWarehouseName,
+		arg.AfterProductVariantID,
+		arg.AfterWarehouseID,
+		arg.PageLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
