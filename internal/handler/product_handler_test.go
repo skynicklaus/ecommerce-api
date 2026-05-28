@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,6 +127,10 @@ func TestCreateProduct_Integration(t *testing.T) {
 		token := uuid.New().String()
 		tempKey := fmt.Sprintf("temp/%s.png", token)
 		finalKey := fmt.Sprintf("assets/%s/%s/%s.png", org.ID.String(), currentYearMonth, token)
+		t.Cleanup(func() {
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, tempKey)
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, finalKey)
+		})
 
 		// A. Put temporary object into S3 (Garage)
 		_, err = s3Storage.S3.PutObject(ctx, &s3.PutObjectInput{
@@ -261,6 +266,10 @@ func TestCreateProduct_Integration(t *testing.T) {
 		token := uuid.New().String()
 		tempKey := fmt.Sprintf("temp/%s.png", token)
 		finalKey := fmt.Sprintf("assets/%s/%s/%s.png", org.ID.String(), currentYearMonth, token)
+		t.Cleanup(func() {
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, tempKey)
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, finalKey)
+		})
 
 		// A. Put temporary object into S3
 		_, err = s3Storage.S3.PutObject(ctx, &s3.PutObjectInput{
@@ -350,6 +359,10 @@ func TestCreateProduct_Integration(t *testing.T) {
 		token := uuid.New().String()
 		tempKey := fmt.Sprintf("temp/%s.png", token)
 		finalKey := fmt.Sprintf("assets/%s/%s/%s.png", org.ID.String(), currentYearMonth, token)
+		t.Cleanup(func() {
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, tempKey)
+			_ = s3Storage.DeleteObject(context.Background(), bucketName, finalKey)
+		})
 
 		// Put S3 temp asset
 		_, err = s3Storage.S3.PutObject(ctx, &s3.PutObjectInput{
@@ -982,15 +995,29 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 		require.Equal(t, http.StatusNotFound, apiErr.StatusCode)
 	})
 
-	t.Run("merchant_update_removes_variant", func(t *testing.T) {
+	t.Run("merchant_update_deactivates_omitted_variant", func(t *testing.T) {
 		// Product currently has 2 variants from merchant_update_product_put.
-		// Send an update that omits one — the orphaned variant must be deleted from DB.
+		// Send an update that omits one — the omitted variant must be preserved but deactivated.
 		currentVariants, err := store.ListProductVariantsByProductID(ctx, productID)
 		require.NoError(t, err)
-		require.Len(t, currentVariants, 2)
+		if len(currentVariants) < 2 {
+			_, err = store.CreateProductVariant(ctx, db.CreateProductVariantParams{
+				ProductID:      productID,
+				OrganizationID: org.ID,
+				Sku:            "SKU-OMIT-" + uuid.New().String()[:6],
+				Name:           "Omitted Variant",
+				Price:          decimal.NewFromFloat(19.99),
+			})
+			require.NoError(t, err)
+			currentVariants, err = store.ListProductVariantsByProductID(ctx, productID)
+			require.NoError(t, err)
+		}
+		require.GreaterOrEqual(t, len(currentVariants), 2)
 
 		keepVariant := currentVariants[0]
 		dropVariantID := currentVariants[1].ID
+		_, err = connPool.Exec(ctx, "UPDATE product_variants SET is_active = TRUE WHERE id = $1", dropVariantID)
+		require.NoError(t, err)
 
 		bodyBytes, err := json.Marshal(CreateProductRequest{
 			Name:          "Updated Product Title",
@@ -1027,16 +1054,15 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 
 		remaining, err := store.ListProductVariantsByProductID(ctx, productID)
 		require.NoError(t, err)
-		require.Len(t, remaining, 1, "dropped variant should have been deleted from DB")
-		require.Equal(
-			t,
-			keepVariant.ID,
-			remaining[0].ID,
-			"surviving variant ID should be unchanged",
-		)
+		require.Len(t, remaining, 2, "omitted variant should be preserved for cart/order references")
+
+		variantsByID := make(map[uuid.UUID]db.ProductVariant, len(remaining))
 		for _, v := range remaining {
-			require.NotEqual(t, dropVariantID, v.ID, "dropped variant must not remain in DB")
+			variantsByID[v.ID] = v
 		}
+		require.Contains(t, variantsByID, keepVariant.ID)
+		require.Contains(t, variantsByID, dropVariantID)
+		require.False(t, variantsByID[dropVariantID].IsActive, "omitted variant should be deactivated")
 	})
 
 	t.Run("merchant_update_reuses_existing_video_asset_key", func(t *testing.T) {
@@ -1342,6 +1368,7 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 
 	t.Run("merchant_delete_product", func(t *testing.T) {
 		assetKey := fmt.Sprintf("assets/%s/%s/delete-me.png", org.ID.String(), currentYearMonth)
+		t.Cleanup(func() { _ = s3Storage.DeleteObject(context.Background(), bucketName, assetKey) })
 		_, err = s3Storage.S3.PutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(assetKey),
@@ -1373,16 +1400,176 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusNoContent, rec.Code)
 
-		_, err = store.GetProductByID(ctx, productID)
-		require.ErrorIs(t, err, db.ErrNotFound)
+		archived, err := store.GetProductByID(ctx, productID)
+		require.NoError(t, err)
+		require.Equal(t, string(util.ProductStatusArchived), archived.Status)
 
-		// Verify S3 asset is deleted in background
-		require.Eventually(t, func() bool {
-			_, headErr := s3Storage.S3.HeadObject(ctx, &s3.HeadObjectInput{
-				Bucket: aws.String(bucketName),
-				Key:    aws.String(assetKey),
-			})
-			return headErr != nil
-		}, 2*time.Second, 10*time.Millisecond, "S3 asset should be deleted in background after product deletion")
+		// Archived products keep their DB and S3 assets so merchant/admin/history views can still render them.
+		assets, err := store.ListProductAssetsByProductID(ctx, productID)
+		require.NoError(t, err)
+		require.NotEmpty(t, assets)
+		_, err = s3Storage.S3.HeadObject(ctx, &s3.HeadObjectInput{
+			Bucket: aws.String(bucketName),
+			Key:    aws.String(assetKey),
+		})
+		require.NoError(t, err)
 	})
+}
+
+func TestListActiveProductsSearch_Integration(t *testing.T) {
+	ctx := t.Context()
+	dbSource := os.Getenv("DB_SOURCE")
+	if dbSource == "" {
+		t.Skip("DB_SOURCE not set")
+	}
+
+	connPool, err := pgxpool.New(ctx, dbSource)
+	require.NoError(t, err)
+	t.Cleanup(connPool.Close)
+	store := db.NewStore(connPool)
+	logger := util.NewLogger()
+	redisClient := cache.New(store, logger)
+	t.Cleanup(func() { _ = redisClient.Close() })
+	s3Storage, err := storage.New(ctx)
+	require.NoError(t, err)
+	h := NewV1Handler(store, logger, redisClient, s3Storage)
+
+	org, err := store.CreateOrganization(ctx, db.CreateOrganizationParams{
+		Name:       "Search Handler Org",
+		Type:       string(util.OrganizationTypeMerchant),
+		Capability: string(util.OrganizationCapabilitySeller),
+		Slug:       "search-handler-" + uuid.NewString()[:8],
+		Status:     string(util.OrganizationStatusActive),
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", org.ID)
+	})
+	category, err := store.CreateCategory(ctx, db.CreateCategoryParams{
+		OrganizationID: &org.ID,
+		Name:           "Search Handler Category",
+		Slug:           "search-handler-category-" + uuid.NewString()[:8],
+		SortOrder:      1,
+	})
+	require.NoError(t, err)
+
+	term := "handlersearch" + uuid.NewString()[:8]
+	activeProduct := createHandlerSearchProduct(t, store, org, category, "Premium "+term+" Chair", "matched by name")
+	secondActiveProduct := createHandlerSearchProduct(t, store, org, category, "Standard "+term+" Chair", "matched by name")
+	thirdActiveProduct := createHandlerSearchProduct(t, store, org, category, "Basic "+term+" Chair", "matched by name")
+	draftProduct := createHandlerSearchProduct(t, store, org, category, "Draft "+term+" Chair", "must not appear")
+	for _, product := range []db.Product{activeProduct, secondActiveProduct, thirdActiveProduct} {
+		_, err = store.UpdateProductStatus(ctx, db.UpdateProductStatusParams{
+			ID:             product.ID,
+			OrganizationID: org.ID,
+			Status:         string(util.ProductStatusActive),
+		})
+		require.NoError(t, err)
+		require.NoError(t, store.UpsertProductSearchDocument(ctx, product.ID))
+	}
+	require.NoError(t, store.UpsertProductSearchDocument(ctx, draftProduct.ID))
+
+	t.Run("search_returns_active_matches_with_cursor", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/products?q="+term+"&limit=10", nil)
+		rec := httptest.NewRecorder()
+
+		err = h.ListActiveProducts(rec, req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rec.Code)
+
+		var resp ListProductsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+		require.Nil(t, resp.NextCursor)
+		require.NotEmpty(t, resp.Data)
+		foundActiveProduct := false
+		for _, product := range resp.Data {
+			require.NotEqual(t, draftProduct.ID, product.ID)
+			if product.ID == activeProduct.ID {
+				foundActiveProduct = true
+			}
+		}
+		require.True(t, foundActiveProduct)
+	})
+
+	t.Run("search_uses_cursor_pagination", func(t *testing.T) {
+		firstReq := httptest.NewRequest(http.MethodGet, "/v1/products?q="+term+"&limit=2", nil)
+		firstRec := httptest.NewRecorder()
+
+		err = h.ListActiveProducts(firstRec, firstReq)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, firstRec.Code)
+
+		var firstResp ListProductsResponse
+		require.NoError(t, json.Unmarshal(firstRec.Body.Bytes(), &firstResp))
+		require.Len(t, firstResp.Data, 2)
+		require.NotNil(t, firstResp.NextCursor)
+
+		secondReq := httptest.NewRequest(
+			http.MethodGet,
+			"/v1/products?q="+term+"&limit=2&cursor="+*firstResp.NextCursor,
+			nil,
+		)
+		secondRec := httptest.NewRecorder()
+
+		err = h.ListActiveProducts(secondRec, secondReq)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, secondRec.Code)
+
+		var secondResp ListProductsResponse
+		require.NoError(t, json.Unmarshal(secondRec.Body.Bytes(), &secondResp))
+		require.Len(t, secondResp.Data, 1)
+
+		seen := map[uuid.UUID]struct{}{}
+		for _, product := range append(firstResp.Data, secondResp.Data...) {
+			require.NotEqual(t, draftProduct.ID, product.ID)
+			_, duplicate := seen[product.ID]
+			require.False(t, duplicate, "product %s returned on multiple pages", product.ID)
+			seen[product.ID] = struct{}{}
+		}
+		require.Len(t, seen, 3)
+	})
+
+	t.Run("search_invalid_cursor_returns_400", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/products?q="+term+"&cursor=not-a-valid-cursor", nil)
+		rec := httptest.NewRecorder()
+
+		err = h.ListActiveProducts(rec, req)
+		require.Error(t, err)
+		var apiErr apierror.APIError
+		require.ErrorAs(t, err, &apiErr)
+		require.Equal(t, http.StatusBadRequest, apiErr.StatusCode)
+	})
+
+	t.Run("search_query_too_long", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/v1/products?q="+strings.Repeat("a", 129), nil)
+		rec := httptest.NewRecorder()
+
+		err = h.ListActiveProducts(rec, req)
+		require.Error(t, err)
+		var apiErr apierror.APIError
+		require.ErrorAs(t, err, &apiErr)
+		require.Equal(t, http.StatusUnprocessableEntity, apiErr.StatusCode)
+	})
+}
+
+func createHandlerSearchProduct(
+	t *testing.T,
+	store db.Store,
+	org db.Organization,
+	category db.Category,
+	name string,
+	description string,
+) db.Product {
+	t.Helper()
+
+	product, err := store.CreateProduct(t.Context(), db.CreateProductParams{
+		OrganizationID: org.ID,
+		CategoryID:     category.ID,
+		Name:           name,
+		Slug:           "search-handler-product-" + uuid.NewString(),
+		Description:    []byte(fmt.Sprintf(`{"text":%q}`, description)),
+		Specification:  []byte(`{"color":"blue"}`),
+	})
+	require.NoError(t, err)
+	return product
 }

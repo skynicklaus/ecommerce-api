@@ -197,6 +197,7 @@ func (h *V1Handler) CreateProduct( //nolint:gocognit,funlen,gocyclo,cyclop // id
 	}()
 
 	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(productAssetCopyConcurrency)
 	for _, pending := range resolvedAssets {
 		g.Go(func() error {
 			if copyErr := h.storage.CopyObject(
@@ -825,21 +826,25 @@ func buildProductResponseList(
 // ListActiveProducts godoc
 //
 //	@Summary		List active products
-//	@Description	Lists buyer-visible active products across merchants using cursor pagination.
+//	@Description	Lists buyer-visible active products across merchants using cursor pagination. When q is provided, returns ranked search results using a search cursor. Search cursors snapshot the rank from the previous page, so live product edits between page requests may shift result membership or ordering.
 //	@Tags			storefront
 //	@Produce		json
 //	@Param			limit	query		int		false	"Page size"	minimum(1)	maximum(100)	default(20)
 //	@Param			cursor	query		string	false	"Opaque cursor returned from the previous page"
+//	@Param			q		query		string	false	"Full-text product search query"	maxlength(128)
 //	@Success		200		{object}	ListProductsResponse
 //	@Failure		400		{object}	apierror.APIError
+//	@Failure		422		{object}	apierror.APIError
 //	@Failure		500		{object}	apierror.APIError
 //	@Router			/products [get]
-//
-//nolint:funlen
 func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 
 	limit := parseLimit(r)
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q != "" {
+		return h.searchActiveProducts(w, r, q, limit)
+	}
 
 	afterCreatedAt, afterID, cursorErr := decodeCursor(r.URL.Query().Get("cursor"))
 	if cursorErr != nil {
@@ -865,6 +870,69 @@ func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) e
 		nextCursor = &encoded
 	}
 
+	rows := make([]productListRow, len(products))
+	for i, p := range products {
+		rows[i] = productListRow{
+			ID: p.ID, OrganizationID: p.OrganizationID, CategoryID: p.CategoryID,
+			Name: p.Name, Slug: p.Slug, Description: p.Description,
+			Status: p.Status, IsFeatured: p.IsFeatured, Specification: p.Specification,
+			CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		}
+	}
+
+	return h.writeProductListResponse(ctx, w, rows, nextCursor)
+}
+
+func (h *V1Handler) searchActiveProducts(w http.ResponseWriter, r *http.Request, query string, limit int32) error {
+	if len(query) > maxSearchQueryLength {
+		return apierror.NewAPIError(http.StatusUnprocessableEntity, errors.New("search query too long"))
+	}
+
+	afterRank, afterCreatedAt, afterID, cursorErr := decodeSearchCursor(r.URL.Query().Get("cursor"))
+	if cursorErr != nil {
+		return apierror.NewAPIError(
+			http.StatusBadRequest,
+			fmt.Errorf("invalid search cursor: %w", cursorErr),
+		)
+	}
+
+	products, err := h.store.SearchProducts(r.Context(), db.SearchProductsParams{
+		AfterRank:      afterRank,
+		AfterCreatedAt: afterCreatedAt,
+		AfterID:        afterID,
+		Query:          query,
+		PageLimit:      limit,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to search products: %w", err)
+	}
+
+	var nextCursor *string
+	if len(products) == int(limit) && len(products) > 0 {
+		last := products[len(products)-1]
+		encoded := encodeSearchCursor(last.Rank, last.CreatedAt, last.ID)
+		nextCursor = &encoded
+	}
+
+	rows := make([]productListRow, len(products))
+	for i, p := range products {
+		rows[i] = productListRow{
+			ID: p.ID, OrganizationID: p.OrganizationID, CategoryID: p.CategoryID,
+			Name: p.Name, Slug: p.Slug, Description: p.Description,
+			Status: p.Status, IsFeatured: p.IsFeatured, Specification: p.Specification,
+			CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		}
+	}
+
+	return h.writeProductListResponse(r.Context(), w, rows, nextCursor)
+}
+
+func (h *V1Handler) writeProductListResponse(
+	ctx context.Context,
+	w http.ResponseWriter,
+	products []productListRow,
+	nextCursor *string,
+) error {
 	if len(products) == 0 {
 		return WriteJSON(w, http.StatusOK, ListProductsResponse{
 			Data:       []ProductDetailsResponse{},
@@ -932,19 +1000,9 @@ func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) e
 		}
 	}
 
-	rows := make([]productListRow, len(products))
-	for i, p := range products {
-		rows[i] = productListRow{
-			ID: p.ID, OrganizationID: p.OrganizationID, CategoryID: p.CategoryID,
-			Name: p.Name, Slug: p.Slug, Description: p.Description,
-			Status: p.Status, IsFeatured: p.IsFeatured, Specification: p.Specification,
-			CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
-		}
-	}
-
 	return WriteJSON(w, http.StatusOK, ListProductsResponse{
 		Data: buildProductResponseList(
-			rows,
+			products,
 			variantsByProduct,
 			attrsByVariant,
 			productAssetsByProduct,
@@ -998,8 +1056,10 @@ func (h *V1Handler) resolveAssetURLsParallel(
 }
 
 const (
-	defaultListLimit = 20
-	maxListLimit     = 100
+	defaultListLimit            = 20
+	maxListLimit                = 100
+	maxSearchQueryLength        = 128
+	productAssetCopyConcurrency = 8
 )
 
 func parseLimit(r *http.Request) int32 {
@@ -1020,6 +1080,11 @@ func parseLimit(r *http.Request) int32 {
 
 func encodeCursor(t time.Time, id uuid.UUID) string {
 	raw := fmt.Sprintf("%d:%s", t.UnixNano(), id.String())
+	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+}
+
+func encodeSearchCursor(rank float64, t time.Time, id uuid.UUID) string {
+	raw := fmt.Sprintf("%s:%d:%s", strconv.FormatFloat(rank, 'g', -1, 64), t.UnixNano(), id.String())
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
@@ -1053,6 +1118,41 @@ func decodeCursor(cursor string) (time.Time, uuid.UUID, error) {
 	}
 
 	return time.Unix(0, nanos).UTC(), id, nil
+}
+
+func decodeSearchCursor(cursor string) (float64, time.Time, uuid.UUID, error) {
+	if cursor == "" {
+		return math.Inf(1), time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC), uuid.Max, nil
+	}
+
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, time.Time{}, uuid.Nil, errors.New("malformed cursor encoding")
+	}
+
+	//nolint:mnd // exactly 3 parts
+	parts := strings.SplitN(string(raw), ":", 3)
+	//nolint:mnd // exactly 3 parts
+	if len(parts) != 3 {
+		return 0, time.Time{}, uuid.Nil, errors.New("malformed cursor payload")
+	}
+
+	rank, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		return 0, time.Time{}, uuid.Nil, errors.New("malformed cursor rank")
+	}
+
+	nanos, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, time.Time{}, uuid.Nil, errors.New("malformed cursor timestamp")
+	}
+
+	id, err := uuid.Parse(parts[2])
+	if err != nil {
+		return 0, time.Time{}, uuid.Nil, errors.New("malformed cursor id")
+	}
+
+	return rank, time.Unix(0, nanos).UTC(), id, nil
 }
 
 const (
@@ -1637,6 +1737,7 @@ func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error 
 	}()
 
 	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(productAssetCopyConcurrency)
 	for _, pending := range resolvedAssets {
 		if pending.TempKey == "" {
 			continue // Already in final location
@@ -1717,32 +1818,50 @@ func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error 
 		}
 	}
 
-	// Identify and delete S3 assets that are no longer used by the product.
-	usedAssetKeys := make(map[string]struct{})
-	for _, asset := range result.ProductAssets {
-		usedAssetKeys[asset.AssetKey] = struct{}{}
-	}
-	for _, asset := range existingAssets {
-		if _, used := usedAssetKeys[asset.AssetKey]; !used {
-			go func(key string) {
-				//nolint:mnd // timeout duration
-				cleanupCtx, cancel := context.WithTimeout(
-					context.WithoutCancel(ctx),
-					10*time.Second,
-				)
-				defer cancel()
-				_ = h.storage.DeleteObject(cleanupCtx, *h.bucket, key)
-			}(asset.AssetKey)
-		}
+	unusedAssetKeys := unusedProductAssetKeys(existingAssets, result.ProductAssets)
+	if len(unusedAssetKeys) > 0 {
+		go h.cleanupUnusedAssetKeys(ctx, unusedAssetKeys)
 	}
 
 	return WriteJSON(w, http.StatusOK, result)
 }
 
+func unusedProductAssetKeys(existingAssets []db.ProductAsset, currentAssets []db.ProductAsset) []string {
+	usedAssetKeys := make(map[string]struct{}, len(currentAssets))
+	for _, asset := range currentAssets {
+		usedAssetKeys[asset.AssetKey] = struct{}{}
+	}
+
+	unusedAssetKeys := make([]string, 0, len(existingAssets))
+	for _, asset := range existingAssets {
+		if _, used := usedAssetKeys[asset.AssetKey]; !used {
+			unusedAssetKeys = append(unusedAssetKeys, asset.AssetKey)
+		}
+	}
+	return unusedAssetKeys
+}
+
+func (h *V1Handler) cleanupUnusedAssetKeys(parentCtx context.Context, keys []string) {
+	//nolint:mnd // timeout duration
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(parentCtx), 10*time.Second)
+	defer cancel()
+
+	for _, key := range keys {
+		if err := h.storage.DeleteObject(cleanupCtx, *h.bucket, key); err != nil {
+			h.logger.WarnContext(
+				cleanupCtx,
+				"failed to delete unused product asset",
+				slog.String("key", key),
+				slog.Any("err", err),
+			)
+		}
+	}
+}
+
 // DeleteProduct godoc
 //
-//	@Summary		Delete product
-//	@Description	Deletes a merchant-owned product and schedules associated asset cleanup.
+//	@Summary		Archive product
+//	@Description	Archives a merchant-owned product.
 //	@Tags			products
 //	@Param			id	path	string	true	"Product UUID"
 //	@Success		204	"No content"
@@ -1779,41 +1898,15 @@ func (h *V1Handler) DeleteProduct(w http.ResponseWriter, r *http.Request) error 
 		return apierror.NewAPIError(http.StatusNotFound, errors.New("product not found"))
 	}
 
-	// Fetch assets for S3 cleanup before DB delete cascades them.
-	assets, err := h.store.ListProductAssetsByProductID(ctx, productID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch product assets before deletion: %w", err)
-	}
-
-	// Perform DB delete (cascades to variants, assets, variant_attributes).
-	err = h.store.DeleteProduct(ctx, db.DeleteProductParams{
+	// Archive the product instead of hard-deleting it, so carts and future order/history flows can
+	// continue to resolve product and variant details. The archive query also deactivates variants
+	// to keep product and variant availability consistent.
+	err := h.store.DeleteProduct(ctx, db.DeleteProductParams{
 		ID:             productID,
 		OrganizationID: organization.ID,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete product: %w", err)
-	}
-
-	// Clean up S3 assets in background goroutine.
-	if len(assets) > 0 {
-		go func() {
-			//nolint:mnd // timeout duration
-			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-			defer cancel()
-			for _, asset := range assets {
-				if delErr := h.storage.DeleteObject(
-					cleanupCtx,
-					*h.bucket,
-					asset.AssetKey,
-				); delErr != nil {
-					h.logger.WarnContext(
-						cleanupCtx, "failed to delete asset from S3 on product deletion",
-						slog.String("key", asset.AssetKey),
-						slog.Any("err", delErr),
-					)
-				}
-			}
-		}()
+		return fmt.Errorf("failed to archive product: %w", err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
