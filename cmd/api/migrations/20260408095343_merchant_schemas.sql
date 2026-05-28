@@ -143,6 +143,243 @@ CREATE TABLE IF NOT EXISTS product_variant_attributes (
     CONSTRAINT product_variant_attributes_attribute_value FOREIGN KEY (attribute_value_id) REFERENCES attribute_values (id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS product_search_documents (
+    product_id UUID PRIMARY KEY,
+    search_vector tsvector NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_product_search_documents_product_id FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+);
+
+CREATE
+OR REPLACE FUNCTION rebuild_product_search_document(p_product_id uuid) RETURNS void AS
+$$
+BEGIN
+    INSERT INTO
+        product_search_documents (
+            product_id,
+            search_vector,
+            updated_at
+        )
+    SELECT
+        p.id,
+        setweight(to_tsvector('simple', COALESCE(p.name, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(variant_doc.names, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(variant_doc.skus, '')), 'A') ||
+        setweight(to_tsvector('simple', COALESCE(c.name, '')), 'B') ||
+        setweight(
+            jsonb_to_tsvector(
+                'simple',
+                COALESCE(p.description, '{}'::jsonb),
+                '["string"]'
+            ),
+            'B'
+        ) ||
+        setweight(to_tsvector('simple', COALESCE(attribute_doc.values, '')), 'B') ||
+        setweight(to_tsvector('simple', COALESCE(attribute_doc.labels, '')), 'B') ||
+        setweight(
+            jsonb_to_tsvector(
+                'simple',
+                COALESCE(p.specification, '{}'::jsonb),
+                '["string", "key"]'
+            ),
+            'C'
+        ),
+        NOW()
+    FROM
+        products p
+        JOIN categories c ON c.id = p.category_id
+        LEFT JOIN LATERAL (
+            SELECT
+                string_agg(DISTINCT pv.name, ' ') AS names,
+                string_agg(DISTINCT pv.sku, ' ') AS skus
+            FROM
+                product_variants pv
+            WHERE
+                pv.product_id = p.id
+                AND pv.is_active = TRUE
+        ) variant_doc ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                string_agg(DISTINCT av.value, ' ') AS values,
+                string_agg(DISTINCT av.label, ' ') AS labels
+            FROM
+                product_variants pv
+                JOIN product_variant_attributes pva ON pva.product_variant_id = pv.id
+                JOIN attribute_values av ON av.id = pva.attribute_value_id
+            WHERE
+                pv.product_id = p.id
+                AND pv.is_active = TRUE
+        ) attribute_doc ON TRUE
+    WHERE
+        p.id = p_product_id ON CONFLICT (product_id) DO
+    UPDATE
+    SET
+        search_vector = EXCLUDED.search_vector,
+        updated_at = NOW();
+END;
+$$
+LANGUAGE plpgsql SECURITY DEFINER
+SET
+    search_path = pg_catalog,
+    public;
+
+CREATE
+OR REPLACE FUNCTION skip_product_search_document_refresh() RETURNS bool AS
+$$
+BEGIN
+    RETURN COALESCE(NULLIF(current_setting('app.skip_search_doc_refresh', TRUE), ''), 'false')::bool;
+END;
+$$
+LANGUAGE plpgsql STABLE;
+
+CREATE
+OR REPLACE FUNCTION refresh_product_search_document_from_product() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF skip_product_search_document_refresh() THEN
+        RETURN NEW;
+    END IF;
+
+    PERFORM rebuild_product_search_document(NEW.id);
+    RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE
+OR REPLACE FUNCTION refresh_product_search_document_from_category() RETURNS TRIGGER AS
+$$
+DECLARE
+    affected_product_id uuid;
+BEGIN
+    IF skip_product_search_document_refresh() THEN
+        RETURN NEW;
+    END IF;
+
+    FOR affected_product_id IN
+        SELECT
+            id
+        FROM
+            products
+        WHERE
+            category_id = NEW.id
+    LOOP
+        PERFORM rebuild_product_search_document(affected_product_id);
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE
+OR REPLACE FUNCTION refresh_product_search_document_from_variant() RETURNS TRIGGER AS
+$$
+BEGIN
+    IF skip_product_search_document_refresh() THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        PERFORM rebuild_product_search_document(OLD.product_id);
+        RETURN OLD;
+    END IF;
+
+    PERFORM rebuild_product_search_document(NEW.product_id);
+    RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE
+OR REPLACE FUNCTION refresh_product_search_document_from_variant_attribute() RETURNS TRIGGER AS
+$$
+DECLARE
+    affected_product_id uuid;
+BEGIN
+    IF skip_product_search_document_refresh() THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+
+    SELECT
+        product_id
+    INTO
+        affected_product_id
+    FROM
+        product_variants
+    WHERE
+        id = COALESCE(NEW.product_variant_id, OLD.product_variant_id);
+
+    IF affected_product_id IS NOT NULL THEN
+        PERFORM rebuild_product_search_document(affected_product_id);
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE
+OR REPLACE FUNCTION refresh_product_search_document_from_attribute_value() RETURNS TRIGGER AS
+$$
+DECLARE
+    affected_product_id uuid;
+BEGIN
+    IF skip_product_search_document_refresh() THEN
+        RETURN NEW;
+    END IF;
+
+    FOR affected_product_id IN
+        SELECT DISTINCT
+            pv.product_id
+        FROM
+            product_variant_attributes pva
+            JOIN product_variants pv ON pv.id = pva.product_variant_id
+        WHERE
+            pva.attribute_value_id = NEW.id
+    LOOP
+        PERFORM rebuild_product_search_document(affected_product_id);
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_products_refresh_search_document AFTER
+INSERT
+    OR UPDATE OF name,
+    description,
+    specification,
+    category_id ON products FOR EACH ROW EXECUTE FUNCTION refresh_product_search_document_from_product();
+
+CREATE TRIGGER trg_categories_refresh_product_search_documents AFTER
+UPDATE OF name ON categories FOR EACH ROW EXECUTE FUNCTION refresh_product_search_document_from_category();
+
+CREATE TRIGGER trg_product_variants_refresh_search_document AFTER
+INSERT
+    OR UPDATE OF name,
+    sku,
+    is_active
+    OR DELETE ON product_variants FOR EACH ROW EXECUTE FUNCTION refresh_product_search_document_from_variant();
+
+CREATE TRIGGER trg_product_variant_attributes_refresh_search_document AFTER
+INSERT
+    OR DELETE ON product_variant_attributes FOR EACH ROW EXECUTE FUNCTION refresh_product_search_document_from_variant_attribute();
+
+CREATE TRIGGER trg_attribute_values_refresh_product_search_documents AFTER
+UPDATE OF value,
+label ON attribute_values FOR EACH ROW EXECUTE FUNCTION refresh_product_search_document_from_attribute_value();
+
 CREATE TRIGGER trg_products_updated_at BEFORE
 UPDATE
     ON products FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -157,6 +394,32 @@ UPDATE
 DROP TRIGGER IF EXISTS trg_product_variants_updated_at ON product_variants;
 
 DROP TRIGGER IF EXISTS trg_products_updated_at ON products;
+
+DROP TRIGGER IF EXISTS trg_attribute_values_refresh_product_search_documents ON attribute_values;
+
+DROP TRIGGER IF EXISTS trg_product_variant_attributes_refresh_search_document ON product_variant_attributes;
+
+DROP TRIGGER IF EXISTS trg_product_variants_refresh_search_document ON product_variants;
+
+DROP TRIGGER IF EXISTS trg_categories_refresh_product_search_documents ON categories;
+
+DROP TRIGGER IF EXISTS trg_products_refresh_search_document ON products;
+
+DROP FUNCTION IF EXISTS refresh_product_search_document_from_attribute_value();
+
+DROP FUNCTION IF EXISTS refresh_product_search_document_from_variant_attribute();
+
+DROP FUNCTION IF EXISTS refresh_product_search_document_from_variant();
+
+DROP FUNCTION IF EXISTS refresh_product_search_document_from_category();
+
+DROP FUNCTION IF EXISTS refresh_product_search_document_from_product();
+
+DROP FUNCTION IF EXISTS skip_product_search_document_refresh();
+
+DROP FUNCTION IF EXISTS rebuild_product_search_document(uuid);
+
+DROP TABLE IF EXISTS product_search_documents;
 
 DROP TABLE IF EXISTS product_variant_attributes;
 

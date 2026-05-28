@@ -66,7 +66,11 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_attribute_values_value ON attr
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_variant_attributes_attribute_value ON product_variant_attributes (attribute_value_id);
 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_product_search_documents_vector ON product_search_documents USING GIN (search_vector);
+
 -- +goose Down
+DROP INDEX CONCURRENTLY IF EXISTS idx_product_search_documents_vector;
+
 DROP INDEX CONCURRENTLY IF EXISTS idx_product_variant_attributes_attribute_value;
 
 DROP INDEX CONCURRENTLY IF EXISTS uq_attribute_values_value;

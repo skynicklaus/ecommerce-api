@@ -13,6 +13,9 @@ ALTER TABLE
     product_variants ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE
+    product_search_documents ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE
     warehouses ENABLE ROW LEVEL SECURITY;
 
 ALTER TABLE
@@ -26,6 +29,9 @@ ALTER TABLE
 
 ALTER TABLE
     product_variants FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE
+    product_search_documents FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE
     warehouses FORCE ROW LEVEL SECURITY;
@@ -45,6 +51,25 @@ SELECT
         WHERE
             id = product_id
             AND STATUS = 'active'
+    )
+$$
+LANGUAGE SQL STABLE SECURITY DEFINER
+SET
+    search_path = pg_catalog,
+    public;
+
+CREATE
+OR REPLACE FUNCTION is_current_org_product(p_product_id uuid) RETURNS bool AS
+$$
+SELECT
+    EXISTS (
+        SELECT
+            1
+        FROM
+            products
+        WHERE
+            id = p_product_id
+            AND organization_id = current_org_id()
     )
 $$
 LANGUAGE SQL STABLE SECURITY DEFINER
@@ -161,6 +186,36 @@ CREATE POLICY org_isolation_delete ON product_variants FOR DELETE USING (
     OR is_platform_admin()
 );
 
+CREATE POLICY org_isolation_read ON product_search_documents FOR
+SELECT
+    USING (
+        is_product_active(product_id)
+        OR is_current_org_product(product_id)
+        OR is_platform_user()
+    );
+
+CREATE POLICY org_isolation_write ON product_search_documents FOR
+INSERT
+    WITH CHECK (
+        is_current_org_product(product_id)
+        OR is_platform_admin()
+    );
+
+CREATE POLICY org_isolation_update ON product_search_documents FOR
+UPDATE
+    USING (
+        is_current_org_product(product_id)
+        OR is_platform_admin()
+    ) WITH CHECK (
+        is_current_org_product(product_id)
+        OR is_platform_admin()
+    );
+
+CREATE POLICY org_isolation_delete ON product_search_documents FOR DELETE USING (
+    is_current_org_product(product_id)
+    OR is_platform_admin()
+);
+
 CREATE POLICY org_isolation_read ON warehouses FOR
 SELECT
     USING (
@@ -238,6 +293,14 @@ DROP POLICY IF EXISTS org_isolation_write ON warehouses;
 
 DROP POLICY IF EXISTS org_isolation_read ON warehouses;
 
+DROP POLICY IF EXISTS org_isolation_delete ON product_search_documents;
+
+DROP POLICY IF EXISTS org_isolation_update ON product_search_documents;
+
+DROP POLICY IF EXISTS org_isolation_write ON product_search_documents;
+
+DROP POLICY IF EXISTS org_isolation_read ON product_search_documents;
+
 DROP POLICY IF EXISTS org_isolation_delete ON product_variants;
 
 DROP POLICY IF EXISTS org_isolation_update ON product_variants;
@@ -264,6 +327,8 @@ DROP POLICY IF EXISTS org_isolation_read ON categories;
 
 DROP FUNCTION IF EXISTS is_organization_warehouse(bigint);
 
+DROP FUNCTION IF EXISTS is_current_org_product(uuid);
+
 DROP FUNCTION IF EXISTS is_product_active(uuid);
 
 ALTER TABLE
@@ -274,6 +339,9 @@ ALTER TABLE
 
 ALTER TABLE
     product_variants NO FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE
+    product_search_documents NO FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE
     products NO FORCE ROW LEVEL SECURITY;
@@ -289,6 +357,9 @@ ALTER TABLE
 
 ALTER TABLE
     product_variants DISABLE ROW LEVEL SECURITY;
+
+ALTER TABLE
+    product_search_documents DISABLE ROW LEVEL SECURITY;
 
 ALTER TABLE
     products DISABLE ROW LEVEL SECURITY;
