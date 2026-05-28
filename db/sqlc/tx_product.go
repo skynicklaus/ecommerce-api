@@ -43,6 +43,11 @@ type CreateProductTxResults struct {
 	ProductAssets   []ProductAsset   `json:"productAssets"`
 }
 
+func (q *Queries) skipProductSearchDocumentRefresh(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, "SELECT set_config('app.skip_search_doc_refresh', 'true', true)")
+	return err
+}
+
 //nolint:gocognit
 func (store *SQLStore) CreateProductTx(
 	ctx context.Context,
@@ -52,6 +57,10 @@ func (store *SQLStore) CreateProductTx(
 
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
+
+		if err = q.skipProductSearchDocumentRefresh(ctx); err != nil {
+			return err
+		}
 
 		results.Product, err = q.CreateProduct(ctx, buildCreateProductParams(arg))
 		if err != nil {
@@ -108,6 +117,10 @@ func (store *SQLStore) CreateProductTx(
 
 				results.ProductAssets = append(results.ProductAssets, asset)
 			}
+		}
+
+		if err = q.UpsertProductSearchDocument(ctx, results.Product.ID); err != nil {
+			return err
 		}
 
 		return nil
@@ -174,7 +187,8 @@ type UpdateProductTxParams struct {
 	Assets         []ProductAssetParams
 }
 
-// UpdateProductTx updates an existing product, updates/creates/deletes its variants, and updates its assets.
+// UpdateProductTx updates an existing product, updates/creates its variants, deactivates omitted variants,
+// and updates its assets.
 func (store *SQLStore) UpdateProductTx(
 	ctx context.Context,
 	arg UpdateProductTxParams,
@@ -183,6 +197,10 @@ func (store *SQLStore) UpdateProductTx(
 
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
+
+		if err = q.skipProductSearchDocumentRefresh(ctx); err != nil {
+			return err
+		}
 
 		// 1. Update the product metadata.
 		results.Product, err = q.UpdateProduct(ctx, UpdateProductParams{
@@ -269,7 +287,7 @@ func (store *SQLStore) UpdateProductTx(
 			variantMapByID[variantArg.Sku] = productVariant.ID
 		}
 
-		// 5. Delete variants not in incoming request.
+		// 5. Deactivate variants not in incoming request.
 		for sku, existing := range existingVariantsMap {
 			if _, retained := retainedSKUs[sku]; !retained {
 				if err = q.DeleteProductVariant(ctx, DeleteProductVariantParams{
@@ -281,7 +299,7 @@ func (store *SQLStore) UpdateProductTx(
 			}
 		}
 
-		// 6. Delete all existing assets for the product (cascades or is hard-deleted).
+		// 6. Replace all existing assets for the product.
 		if err = q.DeleteProductAssetsByProductID(ctx, results.Product.ID); err != nil {
 			return err
 		}
@@ -315,6 +333,10 @@ func (store *SQLStore) UpdateProductTx(
 				}
 				results.ProductAssets = append(results.ProductAssets, createdAsset)
 			}
+		}
+
+		if err = q.UpsertProductSearchDocument(ctx, results.Product.ID); err != nil {
+			return err
 		}
 
 		return nil

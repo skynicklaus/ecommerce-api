@@ -17,6 +17,7 @@ type Querier interface {
 	CreateAddress(ctx context.Context, arg CreateAddressParams) (Address, error)
 	CreateAttribute(ctx context.Context, arg CreateAttributeParams) (Attribute, error)
 	CreateAttributeValue(ctx context.Context, arg CreateAttributeValueParams) (AttributeValue, error)
+	CreateCart(ctx context.Context, customerOrgID uuid.UUID) (Cart, error)
 	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateCustomer(ctx context.Context, arg CreateCustomerParams) (Customer, error)
 	CreateCustomerAccount(ctx context.Context, arg CreateCustomerAccountParams) (CreateCustomerAccountRow, error)
@@ -34,6 +35,8 @@ type Querier interface {
 	CreateWarehouse(ctx context.Context, arg CreateWarehouseParams) (Warehouse, error)
 	DeleteAllOtherSessionsByIdentity(ctx context.Context, arg DeleteAllOtherSessionsByIdentityParams) error
 	DeleteAllSessionsByIdentity(ctx context.Context, identityID uuid.UUID) error
+	DeleteCartItemForCustomerOrg(ctx context.Context, arg DeleteCartItemForCustomerOrgParams) error
+	DeleteEmptyCartShopGroups(ctx context.Context, cartID uuid.UUID) error
 	DeleteProduct(ctx context.Context, arg DeleteProductParams) error
 	DeleteProductAssetsByProductID(ctx context.Context, productID uuid.UUID) error
 	DeleteProductVariant(ctx context.Context, arg DeleteProductVariantParams) error
@@ -42,7 +45,12 @@ type Querier interface {
 	DeleteVariantAttributes(ctx context.Context, productVariantID uuid.UUID) error
 	GetActiveProductByID(ctx context.Context, id uuid.UUID) (GetActiveProductByIDRow, error)
 	GetActiveProductBySlug(ctx context.Context, arg GetActiveProductBySlugParams) (GetActiveProductBySlugRow, error)
+	GetActiveVariantForCart(ctx context.Context, id uuid.UUID) (GetActiveVariantForCartRow, error)
 	GetAddressByID(ctx context.Context, id uuid.UUID) (GetAddressByIDRow, error)
+	GetCartByCustomerOrgID(ctx context.Context, customerOrgID uuid.UUID) (Cart, error)
+	GetCartDetails(ctx context.Context, customerOrgID uuid.UUID) ([]GetCartDetailsRow, error)
+	GetCartItemDetailsForCustomerOrg(ctx context.Context, arg GetCartItemDetailsForCustomerOrgParams) (GetCartItemDetailsForCustomerOrgRow, error)
+	GetCartItemForCustomerOrg(ctx context.Context, arg GetCartItemForCustomerOrgParams) (GetCartItemForCustomerOrgRow, error)
 	GetCategoryByID(ctx context.Context, id uuid.UUID) (Category, error)
 	GetCustomerAccountByID(ctx context.Context, customerID uuid.UUID) (GetCustomerAccountByIDRow, error)
 	GetCustomerByEmail(ctx context.Context, email string) (Customer, error)
@@ -52,6 +60,7 @@ type Querier interface {
 	GetIdentity(ctx context.Context, id uuid.UUID) (Identity, error)
 	GetInventoryByVariantAndWarehouseForOrganization(ctx context.Context, arg GetInventoryByVariantAndWarehouseForOrganizationParams) (GetInventoryByVariantAndWarehouseForOrganizationRow, error)
 	GetMemberByIdentityID(ctx context.Context, identityID uuid.UUID) (Member, error)
+	GetOrCreateCartShopGroup(ctx context.Context, arg GetOrCreateCartShopGroupParams) (CartShopGroup, error)
 	GetOrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error)
 	GetOrganizationBySlug(ctx context.Context, slug string) (Organization, error)
 	GetProductByID(ctx context.Context, id uuid.UUID) (GetProductByIDRow, error)
@@ -83,17 +92,27 @@ type Querier interface {
 	ListVariantAttributesByProduct(ctx context.Context, productID uuid.UUID) ([]ListVariantAttributesByProductRow, error)
 	ListVariantAttributesByProductIDs(ctx context.Context, productIds []uuid.UUID) ([]ListVariantAttributesByProductIDsRow, error)
 	ListWarehousesByOrganization(ctx context.Context, organizationID uuid.UUID) ([]ListWarehousesByOrganizationRow, error)
+	RebuildAllProductSearchDocuments(ctx context.Context) error
+	RecalculateCartShopGroupSelection(ctx context.Context, id uuid.UUID) (CartShopGroup, error)
+	RecalculateCartShopGroupSubtotal(ctx context.Context, id uuid.UUID) (CartShopGroup, error)
 	RenewSession(ctx context.Context, arg RenewSessionParams) error
+	SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error)
+	SetCartItemSelectedForCustomerOrg(ctx context.Context, arg SetCartItemSelectedForCustomerOrgParams) (CartItem, error)
+	SetCartItemsSelectedByGroupForCustomerOrg(ctx context.Context, arg SetCartItemsSelectedByGroupForCustomerOrgParams) error
+	SetCartShopGroupSelectedForCustomerOrg(ctx context.Context, arg SetCartShopGroupSelectedForCustomerOrgParams) (CartShopGroup, error)
 	UpdateAddressByIDAndOrganization(ctx context.Context, arg UpdateAddressByIDAndOrganizationParams) (Address, error)
+	UpdateCartItemQuantityForCustomerOrg(ctx context.Context, arg UpdateCartItemQuantityForCustomerOrgParams) (CartItem, error)
 	UpdateCustomerAccount(ctx context.Context, arg UpdateCustomerAccountParams) (UpdateCustomerAccountRow, error)
 	UpdateProduct(ctx context.Context, arg UpdateProductParams) (Product, error)
 	UpdateProductStatus(ctx context.Context, arg UpdateProductStatusParams) (UpdateProductStatusRow, error)
 	UpdateProductVariant(ctx context.Context, arg UpdateProductVariantParams) (ProductVariant, error)
 	UpdateUserAccount(ctx context.Context, arg UpdateUserAccountParams) (UpdateUserAccountRow, error)
 	UpdateWarehouse(ctx context.Context, arg UpdateWarehouseParams) (Warehouse, error)
+	UpsertCartItem(ctx context.Context, arg UpsertCartItemParams) (CartItem, error)
 	// If either ID does not belong to the organization, the SELECT below returns no
 	// rows. sqlc maps that empty RETURNING result to ErrNotFound for the handler.
 	UpsertInventory(ctx context.Context, arg UpsertInventoryParams) (Inventory, error)
+	UpsertProductSearchDocument(ctx context.Context, pProductID uuid.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -60,8 +60,11 @@ func (q *Queries) CreateProductVariant(ctx context.Context, arg CreateProductVar
 }
 
 const deleteProductVariant = `-- name: DeleteProductVariant :exec
-DELETE FROM
+UPDATE
     product_variants
+SET
+    is_active = FALSE,
+    updated_at = NOW()
 WHERE
     id = $1
     AND organization_id = $2
@@ -75,6 +78,58 @@ type DeleteProductVariantParams struct {
 func (q *Queries) DeleteProductVariant(ctx context.Context, arg DeleteProductVariantParams) error {
 	_, err := q.db.Exec(ctx, deleteProductVariant, arg.ID, arg.OrganizationID)
 	return err
+}
+
+const getActiveVariantForCart = `-- name: GetActiveVariantForCart :one
+SELECT
+    v.id,
+    v.organization_id AS merchant_org_id,
+    v.price,
+    v.name AS variant_name,
+    v.sku,
+    v.is_active AS variant_is_active,
+    p.id AS product_id,
+    p.name AS product_name,
+    p.slug AS product_slug,
+    p.status AS product_status
+FROM
+    product_variants v
+    JOIN products p ON p.id = v.product_id
+WHERE
+    v.id = $1
+    AND v.is_active = TRUE
+    AND p.status = 'active'
+`
+
+type GetActiveVariantForCartRow struct {
+	ID              uuid.UUID       `json:"id"`
+	MerchantOrgID   uuid.UUID       `json:"merchant_org_id"`
+	Price           decimal.Decimal `json:"price"`
+	VariantName     string          `json:"variant_name"`
+	Sku             string          `json:"sku"`
+	VariantIsActive bool            `json:"variant_is_active"`
+	ProductID       uuid.UUID       `json:"product_id"`
+	ProductName     string          `json:"product_name"`
+	ProductSlug     string          `json:"product_slug"`
+	ProductStatus   string          `json:"product_status"`
+}
+
+func (q *Queries) GetActiveVariantForCart(ctx context.Context, id uuid.UUID) (GetActiveVariantForCartRow, error) {
+	row := q.db.QueryRow(ctx, getActiveVariantForCart, id)
+	var i GetActiveVariantForCartRow
+	err := row.Scan(
+		&i.ID,
+		&i.MerchantOrgID,
+		&i.Price,
+		&i.VariantName,
+		&i.Sku,
+		&i.VariantIsActive,
+		&i.ProductID,
+		&i.ProductName,
+		&i.ProductSlug,
+		&i.ProductStatus,
+	)
+	return i, err
 }
 
 const getProductVariantByID = `-- name: GetProductVariantByID :one

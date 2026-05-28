@@ -1,0 +1,65 @@
+-- name: UpsertProductSearchDocument :exec
+SELECT
+    rebuild_product_search_document($1);
+
+-- name: RebuildAllProductSearchDocuments :exec
+INSERT INTO
+    product_search_documents (
+        product_id,
+        search_vector,
+        updated_at
+    )
+SELECT
+    p.id,
+    setweight(to_tsvector('simple', COALESCE(p.name, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(variant_doc.names, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(variant_doc.skus, '')), 'A') ||
+    setweight(to_tsvector('simple', COALESCE(c.name, '')), 'B') ||
+    setweight(
+        jsonb_to_tsvector(
+            'simple',
+            COALESCE(p.description, '{}'::jsonb),
+            '["string"]'
+        ),
+        'B'
+    ) ||
+    setweight(to_tsvector('simple', COALESCE(attribute_doc.values, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(attribute_doc.labels, '')), 'B') ||
+    setweight(
+        jsonb_to_tsvector(
+            'simple',
+            COALESCE(p.specification, '{}'::jsonb),
+            '["string", "key"]'
+        ),
+        'C'
+    ),
+    NOW()
+FROM
+    products p
+    JOIN categories c ON c.id = p.category_id
+    LEFT JOIN LATERAL (
+        SELECT
+            string_agg(DISTINCT pv.name, ' ') AS names,
+            string_agg(DISTINCT pv.sku, ' ') AS skus
+        FROM
+            product_variants pv
+        WHERE
+            pv.product_id = p.id
+            AND pv.is_active = TRUE
+    ) variant_doc ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT
+            string_agg(DISTINCT av.value, ' ') AS values,
+            string_agg(DISTINCT av.label, ' ') AS labels
+        FROM
+            product_variants pv
+            JOIN product_variant_attributes pva ON pva.product_variant_id = pv.id
+            JOIN attribute_values av ON av.id = pva.attribute_value_id
+        WHERE
+            pv.product_id = p.id
+            AND pv.is_active = TRUE
+    ) attribute_doc ON TRUE ON CONFLICT (product_id) DO
+UPDATE
+SET
+    search_vector = EXCLUDED.search_vector,
+    updated_at = NOW();

@@ -41,6 +41,23 @@ type Store interface {
 		context.Context,
 		UpdateWarehouseTxParams,
 	) (WarehouseTxResult, error)
+	AddCartItemTx(
+		context.Context,
+		AddCartItemTxParams,
+	) (AddCartItemTxResult, error)
+	UpdateCartItemQuantityTx(
+		context.Context,
+		UpdateCartItemQuantityTxParams,
+	) (UpdateCartItemQuantityTxResult, error)
+	SetCartItemSelectedTx(
+		context.Context,
+		SetCartItemSelectedTxParams,
+	) (SetCartItemSelectedTxResult, error)
+	RemoveCartItemTx(context.Context, RemoveCartItemTxParams) error
+	SetCartShopGroupSelectedTx(
+		context.Context,
+		SetCartShopGroupSelectedTxParams,
+	) (SetCartShopGroupSelectedTxResult, error)
 }
 
 type SQLStore struct {

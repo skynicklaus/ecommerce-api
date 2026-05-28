@@ -45,6 +45,34 @@ type AttributeValue struct {
 	SortOrder      int16      `json:"sort_order"`
 }
 
+type Cart struct {
+	ID            uuid.UUID `json:"id"`
+	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+type CartItem struct {
+	ID               uuid.UUID       `json:"id"`
+	CartShopGroupID  uuid.UUID       `json:"cart_shop_group_id"`
+	ProductVariantID uuid.UUID       `json:"product_variant_id"`
+	Quantity         int16           `json:"quantity"`
+	UnitPrice        decimal.Decimal `json:"unit_price"`
+	IsSelected       bool            `json:"is_selected"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+type CartShopGroup struct {
+	ID            uuid.UUID       `json:"id"`
+	CartID        uuid.UUID       `json:"cart_id"`
+	MerchantOrgID uuid.UUID       `json:"merchant_org_id"`
+	IsSelected    bool            `json:"is_selected"`
+	Subtotal      decimal.Decimal `json:"subtotal"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
 type Category struct {
 	ID             uuid.UUID  `json:"id"`
 	OrganizationID *uuid.UUID `json:"organization_id"`
@@ -115,15 +143,16 @@ type MemberRole struct {
 }
 
 type Organization struct {
-	ID        uuid.UUID  `json:"id"`
-	ParentID  *uuid.UUID `json:"parent_id"`
-	Name      string     `json:"name"`
-	Slug      string     `json:"slug"`
-	Status    string     `json:"status"`
-	Type      string     `json:"type"`
-	Logo      *string    `json:"logo"`
-	Metadata  []byte     `json:"metadata"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID         uuid.UUID  `json:"id"`
+	ParentID   *uuid.UUID `json:"parent_id"`
+	Name       string     `json:"name"`
+	Slug       string     `json:"slug"`
+	Status     string     `json:"status"`
+	Type       string     `json:"type"`
+	Capability string     `json:"capability"`
+	Logo       *string    `json:"logo"`
+	Metadata   []byte     `json:"metadata"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 type Product struct {
@@ -152,6 +181,12 @@ type ProductAsset struct {
 	SortOrder        int16      `json:"sort_order"`
 	IsPrimary        bool       `json:"is_primary"`
 	DurationSeconds  *int16     `json:"duration_seconds"`
+}
+
+type ProductSearchDocument struct {
+	ProductID    uuid.UUID   `json:"product_id"`
+	SearchVector interface{} `json:"search_vector"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 type ProductVariant struct {

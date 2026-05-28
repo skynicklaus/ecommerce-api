@@ -109,6 +109,35 @@ func TestUpdateProductStatus(t *testing.T) {
 	require.Equal(t, string(util.ProductStatusActive), fetched.Status)
 }
 
+func TestDeleteProductArchivesProductAndDeactivatesVariants(t *testing.T) {
+	product := createRandomProduct(t)
+	variant, err := testStore.CreateProductVariant(t.Context(), db.CreateProductVariantParams{
+		ProductID:      product.ID,
+		OrganizationID: product.OrganizationID,
+		Sku:            "archive-product-variant-" + uuid.NewString()[:8],
+		Name:           "Archive Product Variant",
+		Price:          util.GetRandomPrice(),
+	})
+	require.NoError(t, err)
+	_, err = testPool.Exec(t.Context(), "UPDATE product_variants SET is_active = TRUE WHERE id = $1", variant.ID)
+	require.NoError(t, err)
+
+	err = testStore.DeleteProduct(t.Context(), db.DeleteProductParams{
+		ID:             product.ID,
+		OrganizationID: product.OrganizationID,
+	})
+	require.NoError(t, err)
+
+	archived, err := testStore.GetProductByID(t.Context(), product.ID)
+	require.NoError(t, err)
+	require.Equal(t, string(util.ProductStatusArchived), archived.Status)
+
+	variants, err := testStore.ListProductVariantsByProductID(t.Context(), product.ID)
+	require.NoError(t, err)
+	require.Len(t, variants, 1)
+	require.False(t, variants[0].IsActive)
+}
+
 func TestGetActiveProductByIDAndSlug(t *testing.T) {
 	product := createRandomProduct(t)
 

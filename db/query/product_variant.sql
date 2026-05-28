@@ -72,6 +72,26 @@ ORDER BY
     product_id,
     id;
 
+-- name: GetActiveVariantForCart :one
+SELECT
+    v.id,
+    v.organization_id AS merchant_org_id,
+    v.price,
+    v.name AS variant_name,
+    v.sku,
+    v.is_active AS variant_is_active,
+    p.id AS product_id,
+    p.name AS product_name,
+    p.slug AS product_slug,
+    p.status AS product_status
+FROM
+    product_variants v
+    JOIN products p ON p.id = v.product_id
+WHERE
+    v.id = $1
+    AND v.is_active = TRUE
+    AND p.status = 'active';
+
 -- name: UpdateProductVariant :one
 UPDATE
     product_variants
@@ -86,8 +106,11 @@ RETURNING
     *;
 
 -- name: DeleteProductVariant :exec
-DELETE FROM
+UPDATE
     product_variants
+SET
+    is_active = FALSE,
+    updated_at = NOW()
 WHERE
     id = $1
     AND organization_id = $2;

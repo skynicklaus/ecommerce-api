@@ -68,11 +68,29 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 }
 
 const deleteProduct = `-- name: DeleteProduct :exec
-DELETE FROM
-    products
+WITH archived_product AS (
+    UPDATE
+        products
+    SET
+        "status" = 'archived',
+        updated_at = NOW()
+    WHERE
+        products.id = $1
+        AND products.organization_id = $2
+    RETURNING
+        id,
+        organization_id
+)
+UPDATE
+    product_variants v
+SET
+    is_active = FALSE,
+    updated_at = NOW()
+FROM
+    archived_product p
 WHERE
-    id = $1
-    AND organization_id = $2
+    v.product_id = p.id
+    AND v.organization_id = p.organization_id
 `
 
 type DeleteProductParams struct {
@@ -577,6 +595,124 @@ func (q *Queries) ListProductsByOrganizationWithStatus(ctx context.Context, arg 
 			&i.Specification,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchProducts = `-- name: SearchProducts :many
+WITH search_query AS (
+    SELECT
+        websearch_to_tsquery('simple', $5) AS query
+),
+ranked_products AS (
+    SELECT
+        p.id,
+        p.organization_id,
+        p.category_id,
+        p.name,
+        p.slug,
+        p.description,
+        p."status",
+        p.is_featured,
+        p.specification,
+        p.created_at,
+        p.updated_at,
+        ts_rank_cd(psd.search_vector, search_query.query)::DOUBLE PRECISION AS rank
+    FROM
+        products p
+        JOIN product_search_documents psd ON psd.product_id = p.id,
+        search_query
+    WHERE
+        p."status" = 'active'
+        AND psd.search_vector @@ search_query.query
+)
+SELECT
+    id,
+    organization_id,
+    category_id,
+    name,
+    slug,
+    description,
+    "status",
+    is_featured,
+    specification,
+    created_at,
+    updated_at,
+    rank
+FROM
+    ranked_products
+WHERE
+    (rank, created_at, id) < (
+        $1::DOUBLE PRECISION,
+        $2::TIMESTAMPTZ,
+        $3::UUID
+    )
+ORDER BY
+    rank DESC,
+    created_at DESC,
+    id DESC
+LIMIT
+    $4::INT
+`
+
+type SearchProductsParams struct {
+	AfterRank      float64   `json:"after_rank"`
+	AfterCreatedAt time.Time `json:"after_created_at"`
+	AfterID        uuid.UUID `json:"after_id"`
+	PageLimit      int32     `json:"page_limit"`
+	Query          string    `json:"query"`
+}
+
+type SearchProductsRow struct {
+	ID             uuid.UUID `json:"id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
+	CategoryID     uuid.UUID `json:"category_id"`
+	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
+	Description    []byte    `json:"description"`
+	Status         string    `json:"status"`
+	IsFeatured     bool      `json:"is_featured"`
+	Specification  []byte    `json:"specification"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	Rank           float64   `json:"rank"`
+}
+
+func (q *Queries) SearchProducts(ctx context.Context, arg SearchProductsParams) ([]SearchProductsRow, error) {
+	rows, err := q.db.Query(ctx, searchProducts,
+		arg.AfterRank,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.PageLimit,
+		arg.Query,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchProductsRow{}
+	for rows.Next() {
+		var i SearchProductsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.CategoryID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.Status,
+			&i.IsFeatured,
+			&i.Specification,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Rank,
 		); err != nil {
 			return nil, err
 		}
