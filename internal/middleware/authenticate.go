@@ -161,18 +161,18 @@ func (m *Middleware) RequireService(
 					}
 					responseExpiry = projected
 					if m.beginSessionRenewal(tokenHash) {
-						go func() {
-							defer m.finishSessionRenewal(tokenHash)
+						go func(parentCtx context.Context, renewalToken string, expiresAt time.Time) {
+							defer m.finishSessionRenewal(renewalToken)
 							renewCtx, cancel := context.WithTimeout(
-								context.WithoutCancel(ctx),
+								context.WithoutCancel(parentCtx),
 								renewalTimeout,
 							)
 							defer cancel()
 							_ = m.store.RenewSession(renewCtx, db.RenewSessionParams{
-								Token:     tokenHash,
-								ExpiresAt: projected,
+								Token:     renewalToken,
+								ExpiresAt: expiresAt,
 							})
-						}()
+						}(ctx, tokenHash, projected)
 					}
 				}
 			}
