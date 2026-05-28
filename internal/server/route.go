@@ -81,6 +81,13 @@ func (s *Server) RegisterRoutes() http.Handler {
 			r.Get("/auth/customer/sessions", s.make(v1Handler.ListActiveSessions))
 			r.Delete("/auth/customer/sessions", s.make(v1Handler.RevokeOtherSessions))
 			r.Delete("/auth/customer/sessions/{id}", s.make(v1Handler.RevokeSessionByID))
+
+			r.Get("/cart", s.make(v1Handler.GetCart))
+			r.Post("/cart/items", s.make(v1Handler.AddCartItem))
+			r.Patch("/cart/items/{id}", s.make(v1Handler.UpdateCartItemQuantity))
+			r.Patch("/cart/items/{id}/selected", s.make(v1Handler.SetCartItemSelected))
+			r.Delete("/cart/items/{id}", s.make(v1Handler.RemoveCartItem))
+			r.Patch("/cart/shop-groups/{id}/selected", s.make(v1Handler.SetCartShopGroupSelected))
 		})
 
 		// Protected Merchant account/session routes.
