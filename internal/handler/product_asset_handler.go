@@ -112,6 +112,7 @@ func (h *V1Handler) PreUploadAssets(w http.ResponseWriter, r *http.Request) erro
 
 	results := make([]*PendingUpload, len(headers))
 	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(maxFilesPerUpload)
 
 	for i, header := range headers {
 		g.Go(func() error {
