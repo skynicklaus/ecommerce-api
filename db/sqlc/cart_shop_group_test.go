@@ -77,19 +77,19 @@ func TestDeleteEmptyCartShopGroups(t *testing.T) {
 
 	err = testStore.DeleteEmptyCartShopGroups(t.Context(), cart.ID)
 	require.NoError(t, err)
-	details, err := testStore.GetCartDetails(t.Context(), cart.CustomerOrgID)
+	details, err := testStore.GetCartDetails(t.Context(), cart.BuyerOrgID)
 	require.NoError(t, err)
 	require.Len(t, details, 1)
 
-	err = testStore.DeleteCartItemForCustomerOrg(t.Context(), db.DeleteCartItemForCustomerOrgParams{
+	err = testStore.DeleteCartItemForBuyerOrg(t.Context(), db.DeleteCartItemForBuyerOrgParams{
 		CartItemID:    details[0].CartItemID,
-		CustomerOrgID: cart.CustomerOrgID,
+		BuyerOrgID: cart.BuyerOrgID,
 	})
 	require.NoError(t, err)
 
 	err = testStore.DeleteEmptyCartShopGroups(t.Context(), cart.ID)
 	require.NoError(t, err)
-	details, err = testStore.GetCartDetails(t.Context(), cart.CustomerOrgID)
+	details, err = testStore.GetCartDetails(t.Context(), cart.BuyerOrgID)
 	require.NoError(t, err)
 	require.Empty(t, details)
 }

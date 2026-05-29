@@ -1,4 +1,4 @@
--- name: GetCartItemForCustomerOrg :one
+-- name: GetCartItemForBuyerOrg :one
 SELECT
     i.*,
     g.cart_id
@@ -8,7 +8,7 @@ FROM
     JOIN carts c ON c.id = g.cart_id
 WHERE
     i.id = sqlc.arg('cart_item_id')
-    AND c.customer_org_id = sqlc.arg('customer_org_id');
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id');
 
 -- name: UpsertCartItem :one
 INSERT INTO
@@ -29,7 +29,7 @@ SET
 RETURNING
     *;
 
--- name: UpdateCartItemQuantityForCustomerOrg :one
+-- name: UpdateCartItemQuantityForBuyerOrg :one
 UPDATE
     cart_items i
 SET
@@ -41,11 +41,11 @@ WHERE
     i.id = sqlc.arg('cart_item_id')
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = sqlc.arg('customer_org_id')
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id')
 RETURNING
     i.*;
 
--- name: SetCartItemSelectedForCustomerOrg :one
+-- name: SetCartItemSelectedForBuyerOrg :one
 UPDATE
     cart_items i
 SET
@@ -57,11 +57,11 @@ WHERE
     i.id = sqlc.arg('cart_item_id')
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = sqlc.arg('customer_org_id')
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id')
 RETURNING
     i.*;
 
--- name: DeleteCartItemForCustomerOrg :exec
+-- name: DeleteCartItemForBuyerOrg :exec
 DELETE FROM
     cart_items i USING cart_shop_groups g,
     carts c
@@ -69,9 +69,9 @@ WHERE
     i.id = sqlc.arg('cart_item_id')
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = sqlc.arg('customer_org_id');
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id');
 
--- name: SetCartItemsSelectedByGroupForCustomerOrg :exec
+-- name: SetCartItemsSelectedByGroupForBuyerOrg :exec
 UPDATE
     cart_items i
 SET
@@ -83,4 +83,4 @@ WHERE
     i.cart_shop_group_id = g.id
     AND g.id = sqlc.arg('cart_shop_group_id')
     AND g.cart_id = c.id
-    AND c.customer_org_id = sqlc.arg('customer_org_id');
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id');

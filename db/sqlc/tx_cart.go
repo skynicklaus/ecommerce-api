@@ -7,7 +7,7 @@ import (
 )
 
 type AddCartItemTxParams struct {
-	CustomerOrgID    uuid.UUID
+	BuyerOrgID       uuid.UUID
 	ProductVariantID uuid.UUID
 	Quantity         int16
 }
@@ -29,7 +29,7 @@ func (store *SQLStore) AddCartItemTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		result.Cart, err = q.CreateCart(ctx, arg.CustomerOrgID)
+		result.Cart, err = q.CreateCart(ctx, arg.BuyerOrgID)
 		if err != nil {
 			return err
 		}
@@ -73,9 +73,9 @@ func (store *SQLStore) AddCartItemTx(
 }
 
 type UpdateCartItemQuantityTxParams struct {
-	CustomerOrgID uuid.UUID
-	CartItemID    uuid.UUID
-	Quantity      int16
+	BuyerOrgID uuid.UUID
+	CartItemID uuid.UUID
+	Quantity   int16
 }
 
 type UpdateCartItemQuantityTxResult struct {
@@ -92,10 +92,10 @@ func (store *SQLStore) UpdateCartItemQuantityTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		result.Item, err = q.UpdateCartItemQuantityForCustomerOrg(ctx, UpdateCartItemQuantityForCustomerOrgParams{
-			CartItemID:    arg.CartItemID,
-			CustomerOrgID: arg.CustomerOrgID,
-			Quantity:      arg.Quantity,
+		result.Item, err = q.UpdateCartItemQuantityForBuyerOrg(ctx, UpdateCartItemQuantityForBuyerOrgParams{
+			CartItemID: arg.CartItemID,
+			BuyerOrgID: arg.BuyerOrgID,
+			Quantity:   arg.Quantity,
 		})
 		if err != nil {
 			return err
@@ -113,9 +113,9 @@ func (store *SQLStore) UpdateCartItemQuantityTx(
 }
 
 type SetCartItemSelectedTxParams struct {
-	CustomerOrgID uuid.UUID
-	CartItemID    uuid.UUID
-	IsSelected    bool
+	BuyerOrgID uuid.UUID
+	CartItemID uuid.UUID
+	IsSelected bool
 }
 
 type SetCartItemSelectedTxResult struct {
@@ -132,10 +132,10 @@ func (store *SQLStore) SetCartItemSelectedTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		result.Item, err = q.SetCartItemSelectedForCustomerOrg(ctx, SetCartItemSelectedForCustomerOrgParams{
-			CartItemID:    arg.CartItemID,
-			CustomerOrgID: arg.CustomerOrgID,
-			IsSelected:    arg.IsSelected,
+		result.Item, err = q.SetCartItemSelectedForBuyerOrg(ctx, SetCartItemSelectedForBuyerOrgParams{
+			CartItemID: arg.CartItemID,
+			BuyerOrgID: arg.BuyerOrgID,
+			IsSelected: arg.IsSelected,
 		})
 		if err != nil {
 			return err
@@ -153,23 +153,23 @@ func (store *SQLStore) SetCartItemSelectedTx(
 }
 
 type RemoveCartItemTxParams struct {
-	CustomerOrgID uuid.UUID
-	CartItemID    uuid.UUID
+	BuyerOrgID uuid.UUID
+	CartItemID uuid.UUID
 }
 
 func (store *SQLStore) RemoveCartItemTx(ctx context.Context, arg RemoveCartItemTxParams) error {
 	return store.execTx(ctx, func(q *Queries) error {
-		item, err := q.GetCartItemForCustomerOrg(ctx, GetCartItemForCustomerOrgParams{
-			CartItemID:    arg.CartItemID,
-			CustomerOrgID: arg.CustomerOrgID,
+		item, err := q.GetCartItemForBuyerOrg(ctx, GetCartItemForBuyerOrgParams{
+			CartItemID: arg.CartItemID,
+			BuyerOrgID: arg.BuyerOrgID,
 		})
 		if err != nil {
 			return err
 		}
 
-		if err = q.DeleteCartItemForCustomerOrg(ctx, DeleteCartItemForCustomerOrgParams{
-			CartItemID:    arg.CartItemID,
-			CustomerOrgID: arg.CustomerOrgID,
+		if err = q.DeleteCartItemForBuyerOrg(ctx, DeleteCartItemForBuyerOrgParams{
+			CartItemID: arg.CartItemID,
+			BuyerOrgID: arg.BuyerOrgID,
 		}); err != nil {
 			return err
 		}
@@ -186,7 +186,7 @@ func (store *SQLStore) RemoveCartItemTx(ctx context.Context, arg RemoveCartItemT
 }
 
 type SetCartShopGroupSelectedTxParams struct {
-	CustomerOrgID   uuid.UUID
+	BuyerOrgID      uuid.UUID
 	CartShopGroupID uuid.UUID
 	IsSelected      bool
 }
@@ -204,20 +204,20 @@ func (store *SQLStore) SetCartShopGroupSelectedTx(
 	err := store.execTx(ctx, func(q *Queries) error {
 		var err error
 
-		if _, err = q.SetCartShopGroupSelectedForCustomerOrg(
+		if _, err = q.SetCartShopGroupSelectedForBuyerOrg(
 			ctx,
-			SetCartShopGroupSelectedForCustomerOrgParams{
+			SetCartShopGroupSelectedForBuyerOrgParams{
 				CartShopGroupID: arg.CartShopGroupID,
-				CustomerOrgID:   arg.CustomerOrgID,
+				BuyerOrgID:      arg.BuyerOrgID,
 				IsSelected:      arg.IsSelected,
 			},
 		); err != nil {
 			return err
 		}
 
-		if err = q.SetCartItemsSelectedByGroupForCustomerOrg(ctx, SetCartItemsSelectedByGroupForCustomerOrgParams{
+		if err = q.SetCartItemsSelectedByGroupForBuyerOrg(ctx, SetCartItemsSelectedByGroupForBuyerOrgParams{
 			CartShopGroupID: arg.CartShopGroupID,
-			CustomerOrgID:   arg.CustomerOrgID,
+			BuyerOrgID:      arg.BuyerOrgID,
 			IsSelected:      arg.IsSelected,
 		}); err != nil {
 			return err

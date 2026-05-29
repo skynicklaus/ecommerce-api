@@ -11,6 +11,66 @@ import (
 	"github.com/google/uuid"
 )
 
+const confirmReservedInventory = `-- name: ConfirmReservedInventory :one
+UPDATE
+    inventories
+SET
+    quantity_on_hand = quantity_on_hand - $1::INT,
+    quantity_reserved = quantity_reserved - $1::INT
+WHERE
+    product_variant_id = $2::UUID
+    AND warehouse_id = $3::BIGINT
+    AND $1::INT > 0
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = $3::BIGINT
+        WHERE
+            pv.id = $2::UUID
+            AND pv.organization_id = $4::UUID
+            AND w.organization_id = $4::UUID
+    )
+    AND quantity_reserved >= $1::INT
+    AND quantity_on_hand >= $1::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active
+`
+
+type ConfirmReservedInventoryParams struct {
+	Quantity         int32     `json:"quantity"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+	MerchantOrgID    uuid.UUID `json:"merchant_org_id"`
+}
+
+func (q *Queries) ConfirmReservedInventory(ctx context.Context, arg ConfirmReservedInventoryParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, confirmReservedInventory,
+		arg.Quantity,
+		arg.ProductVariantID,
+		arg.WarehouseID,
+		arg.MerchantOrgID,
+	)
+	var i Inventory
+	err := row.Scan(
+		&i.ProductVariantID,
+		&i.WarehouseID,
+		&i.QuantityOnHand,
+		&i.QuantityReserved,
+		&i.QuantityAvailable,
+		&i.LowStockThreshold,
+		&i.IsActive,
+	)
+	return i, err
+}
+
 const createInventory = `-- name: CreateInventory :one
 INSERT INTO
     inventories (
@@ -441,6 +501,190 @@ func (q *Queries) ListInventoryByVariant(ctx context.Context, arg ListInventoryB
 		return nil, err
 	}
 	return items, nil
+}
+
+const listInventoryCandidatesForCheckoutItem = `-- name: ListInventoryCandidatesForCheckoutItem :many
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    i.product_variant_id = $1::UUID
+    AND pv.organization_id = $2::UUID
+    AND w.organization_id = $2::UUID
+    AND i.is_active = TRUE
+    AND w.is_active = TRUE
+    AND i.quantity_on_hand - i.quantity_reserved >= $3::INT
+ORDER BY
+    i.quantity_available DESC,
+    i.warehouse_id
+LIMIT
+    $4::INT
+`
+
+type ListInventoryCandidatesForCheckoutItemParams struct {
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	MerchantOrgID    uuid.UUID `json:"merchant_org_id"`
+	Quantity         int32     `json:"quantity"`
+	PageLimit        int32     `json:"page_limit"`
+}
+
+func (q *Queries) ListInventoryCandidatesForCheckoutItem(ctx context.Context, arg ListInventoryCandidatesForCheckoutItemParams) ([]Inventory, error) {
+	rows, err := q.db.Query(ctx, listInventoryCandidatesForCheckoutItem,
+		arg.ProductVariantID,
+		arg.MerchantOrgID,
+		arg.Quantity,
+		arg.PageLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Inventory{}
+	for rows.Next() {
+		var i Inventory
+		if err := rows.Scan(
+			&i.ProductVariantID,
+			&i.WarehouseID,
+			&i.QuantityOnHand,
+			&i.QuantityReserved,
+			&i.QuantityAvailable,
+			&i.LowStockThreshold,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const releaseReservedInventory = `-- name: ReleaseReservedInventory :one
+UPDATE
+    inventories
+SET
+    quantity_reserved = quantity_reserved - $1::INT
+WHERE
+    product_variant_id = $2::UUID
+    AND warehouse_id = $3::BIGINT
+    AND $1::INT > 0
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = $3::BIGINT
+        WHERE
+            pv.id = $2::UUID
+            AND pv.organization_id = $4::UUID
+            AND w.organization_id = $4::UUID
+    )
+    AND quantity_reserved >= $1::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active
+`
+
+type ReleaseReservedInventoryParams struct {
+	Quantity         int32     `json:"quantity"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+	MerchantOrgID    uuid.UUID `json:"merchant_org_id"`
+}
+
+func (q *Queries) ReleaseReservedInventory(ctx context.Context, arg ReleaseReservedInventoryParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, releaseReservedInventory,
+		arg.Quantity,
+		arg.ProductVariantID,
+		arg.WarehouseID,
+		arg.MerchantOrgID,
+	)
+	var i Inventory
+	err := row.Scan(
+		&i.ProductVariantID,
+		&i.WarehouseID,
+		&i.QuantityOnHand,
+		&i.QuantityReserved,
+		&i.QuantityAvailable,
+		&i.LowStockThreshold,
+		&i.IsActive,
+	)
+	return i, err
+}
+
+const reserveInventoryForCheckout = `-- name: ReserveInventoryForCheckout :one
+UPDATE
+    inventories
+SET
+    quantity_reserved = quantity_reserved + $1::INT
+WHERE
+    product_variant_id = $2::UUID
+    AND warehouse_id = $3::BIGINT
+    AND $1::INT > 0
+    AND is_active = TRUE
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = $3::BIGINT
+        WHERE
+            pv.id = $2::UUID
+            AND pv.organization_id = $4::UUID
+            AND w.organization_id = $4::UUID
+    )
+    AND quantity_on_hand - quantity_reserved >= $1::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active
+`
+
+type ReserveInventoryForCheckoutParams struct {
+	Quantity         int32     `json:"quantity"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+	MerchantOrgID    uuid.UUID `json:"merchant_org_id"`
+}
+
+func (q *Queries) ReserveInventoryForCheckout(ctx context.Context, arg ReserveInventoryForCheckoutParams) (Inventory, error) {
+	row := q.db.QueryRow(ctx, reserveInventoryForCheckout,
+		arg.Quantity,
+		arg.ProductVariantID,
+		arg.WarehouseID,
+		arg.MerchantOrgID,
+	)
+	var i Inventory
+	err := row.Scan(
+		&i.ProductVariantID,
+		&i.WarehouseID,
+		&i.QuantityOnHand,
+		&i.QuantityReserved,
+		&i.QuantityAvailable,
+		&i.LowStockThreshold,
+		&i.IsActive,
+	)
+	return i, err
 }
 
 const upsertInventory = `-- name: UpsertInventory :one

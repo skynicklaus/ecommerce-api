@@ -4,7 +4,10 @@ package db_test
 
 import (
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/require"
 
 	db "github.com/skynicklaus/ecommerce-api/db/sqlc"
@@ -189,4 +192,213 @@ func TestInventoryScopedQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, productVariant.ProductID, detail.ProductID)
 	require.Equal(t, productVariant.Sku, detail.ProductVariantSku)
+}
+
+func createCheckoutReservationTestRows(t *testing.T, orderItemQuantity int32) (db.InventoryReservation, db.OrderItem, db.ProductVariant, db.Warehouse) {
+	t.Helper()
+
+	buyerOrg, err := testStore.CreateOrganization(t.Context(), db.CreateOrganizationParams{
+		Name:       "buyer-" + util.GetRandomString(t, 8),
+		Type:       string(util.OrganizationTypeIndividual),
+		Capability: string(util.OrganizationCapabilityBuyer),
+		Slug:       "buyer-" + util.GetRandomString(t, 8),
+		Status:     string(util.OrganizationStatusActive),
+	})
+	require.NoError(t, err)
+	cleanupOrganization(t, buyerOrg.ID.String())
+
+	sellerOrg, err := testStore.CreateOrganization(t.Context(), db.CreateOrganizationParams{
+		Name:       "seller-" + util.GetRandomString(t, 8),
+		Type:       string(util.OrganizationTypeMerchant),
+		Capability: string(util.OrganizationCapabilitySeller),
+		Slug:       "seller-" + util.GetRandomString(t, 8),
+		Status:     string(util.OrganizationStatusActive),
+	})
+	require.NoError(t, err)
+	cleanupOrganization(t, sellerOrg.ID.String())
+
+	identity := createRandomIdentity(t)
+	customer, err := testStore.CreateCustomer(t.Context(), db.CreateCustomerParams{
+		IdentityID: identity.ID,
+		Name:       "buyer " + util.GetRandomString(t, 8),
+		Email:      util.GetRandomEmail(t, 10),
+	})
+	require.NoError(t, err)
+
+	member, err := testStore.CreateMember(t.Context(), db.CreateMemberParams{
+		IdentityID:     identity.ID,
+		OrganizationID: buyerOrg.ID,
+	})
+	require.NoError(t, err)
+
+	zero := decimal.Zero
+	checkoutSession, err := testStore.CreateCheckoutSession(t.Context(), db.CreateCheckoutSessionParams{
+		BuyerCustomerID:     customer.ID,
+		BuyerOrgID:          buyerOrg.ID,
+		BuyerMemberID:       member.ID,
+		CheckoutFingerprint: "inventory-test-checkout",
+		Subtotal:            zero,
+		TaxTotal:            zero,
+		ShippingTotal:       zero,
+		DiscountTotal:       zero,
+		GrandTotal:          zero,
+		Currency:            "MYR",
+	})
+	require.NoError(t, err)
+
+	productVariant := createRandomProductVariantWithOrg(t, sellerOrg)
+	warehouse := createRandomWarehouseWithOrg(t, sellerOrg)
+
+	order, err := testStore.CreateOrder(t.Context(), db.CreateOrderParams{
+		CheckoutSessionID:       checkoutSession.ID,
+		MerchantOrgID:           sellerOrg.ID,
+		BuyerCustomerID:         customer.ID,
+		BuyerOrgID:              buyerOrg.ID,
+		BuyerMemberID:           member.ID,
+		OrderNumber:             "ord-" + util.GetRandomString(t, 12),
+		CustomerEmail:           customer.Email,
+		CustomerName:            customer.Name,
+		ShippingAddressSnapshot: []byte(`{"country":"MY"}`),
+		Subtotal:                zero,
+		TaxTotal:                zero,
+		ShippingTotal:           zero,
+		ShippingDiscount:        zero,
+		CouponDiscount:          zero,
+		GrandTotal:              zero,
+		Currency:                "MYR",
+	})
+	require.NoError(t, err)
+
+	productID := productVariant.ProductID
+	productVariantID := productVariant.ID
+	orderItem, err := testStore.CreateOrderItem(t.Context(), db.CreateOrderItemParams{
+		OrderID:          order.ID,
+		ProductID:        &productID,
+		ProductVariantID: &productVariantID,
+		WarehouseID: pgtype.Int8{
+			Int64: warehouse.ID,
+			Valid: true,
+		},
+		ProductName:   "product snapshot",
+		VariantName:   "variant snapshot",
+		Sku:           productVariant.Sku,
+		Quantity:      orderItemQuantity,
+		UnitPrice:     zero,
+		Subtotal:      zero,
+		DiscountTotal: zero,
+		TaxTotal:      zero,
+		Total:         zero,
+		Currency:      "MYR",
+	})
+	require.NoError(t, err)
+
+	reservation, err := testStore.CreateInventoryReservation(t.Context(), db.CreateInventoryReservationParams{
+		CheckoutSessionID: checkoutSession.ID,
+		OrderID:           order.ID,
+		BuyerOrgID:        buyerOrg.ID,
+		MerchantOrgID:     sellerOrg.ID,
+		ExpiresAt:         time.Now().Add(15 * time.Minute),
+	})
+	require.NoError(t, err)
+
+	return reservation, orderItem, productVariant, warehouse
+}
+
+func TestInventoryReservationItemRejectsOverReservation(t *testing.T) {
+	reservation, orderItem, productVariant, warehouse := createCheckoutReservationTestRows(t, 1)
+
+	_, err := testStore.CreateInventoryReservationItem(t.Context(), db.CreateInventoryReservationItemParams{
+		ReservationID:    reservation.ID,
+		OrderItemID:      orderItem.ID,
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		Quantity:         2,
+	})
+	require.Error(t, err)
+}
+
+func TestInventoryReservationItemRejectsQuantityUpdateOverReservation(t *testing.T) {
+	reservation, orderItem, productVariant, warehouse := createCheckoutReservationTestRows(t, 1)
+
+	reservationItem, err := testStore.CreateInventoryReservationItem(t.Context(), db.CreateInventoryReservationItemParams{
+		ReservationID:    reservation.ID,
+		OrderItemID:      orderItem.ID,
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		Quantity:         1,
+	})
+	require.NoError(t, err)
+
+	_, err = testPool.Exec(
+		t.Context(),
+		"UPDATE inventory_reservation_items SET quantity = $1 WHERE id = $2",
+		2,
+		reservationItem.ID,
+	)
+	require.Error(t, err)
+}
+
+func TestInventoryReservationMutations(t *testing.T) {
+	organization := createRandomOrganization(t)
+	cleanupOrganization(t, organization.ID.String())
+	otherOrganization := createRandomOrganization(t)
+	cleanupOrganization(t, otherOrganization.ID.String())
+
+	warehouse := createRandomWarehouseWithOrg(t, organization)
+	productVariant := createRandomProductVariantWithOrg(t, organization)
+	_, err := testStore.UpsertInventory(t.Context(), db.UpsertInventoryParams{
+		OrganizationID:   organization.ID,
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		QuantityOnHand:   10,
+		IsActive:         true,
+	})
+	require.NoError(t, err)
+
+	reserved, err := testStore.ReserveInventoryForCheckout(t.Context(), db.ReserveInventoryForCheckoutParams{
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		MerchantOrgID:    organization.ID,
+		Quantity:         4,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(4), reserved.QuantityReserved)
+	require.Equal(t, int32(6), *reserved.QuantityAvailable)
+
+	released, err := testStore.ReleaseReservedInventory(t.Context(), db.ReleaseReservedInventoryParams{
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		MerchantOrgID:    organization.ID,
+		Quantity:         2,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(2), released.QuantityReserved)
+	require.Equal(t, int32(8), *released.QuantityAvailable)
+
+	confirmed, err := testStore.ConfirmReservedInventory(t.Context(), db.ConfirmReservedInventoryParams{
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		MerchantOrgID:    organization.ID,
+		Quantity:         2,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(8), confirmed.QuantityOnHand)
+	require.Equal(t, int32(0), confirmed.QuantityReserved)
+	require.Equal(t, int32(8), *confirmed.QuantityAvailable)
+
+	_, err = testStore.ReserveInventoryForCheckout(t.Context(), db.ReserveInventoryForCheckoutParams{
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		MerchantOrgID:    otherOrganization.ID,
+		Quantity:         1,
+	})
+	require.ErrorIs(t, err, db.ErrNotFound)
+
+	_, err = testStore.ReserveInventoryForCheckout(t.Context(), db.ReserveInventoryForCheckoutParams{
+		ProductVariantID: productVariant.ID,
+		WarehouseID:      warehouse.ID,
+		MerchantOrgID:    organization.ID,
+		Quantity:         0,
+	})
+	require.ErrorIs(t, err, db.ErrNotFound)
 }

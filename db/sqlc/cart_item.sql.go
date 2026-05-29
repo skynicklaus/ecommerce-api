@@ -13,7 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const deleteCartItemForCustomerOrg = `-- name: DeleteCartItemForCustomerOrg :exec
+const deleteCartItemForBuyerOrg = `-- name: DeleteCartItemForBuyerOrg :exec
 DELETE FROM
     cart_items i USING cart_shop_groups g,
     carts c
@@ -21,20 +21,20 @@ WHERE
     i.id = $1
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = $2
+    AND c.buyer_org_id = $2
 `
 
-type DeleteCartItemForCustomerOrgParams struct {
-	CartItemID    uuid.UUID `json:"cart_item_id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+type DeleteCartItemForBuyerOrgParams struct {
+	CartItemID uuid.UUID `json:"cart_item_id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
 }
 
-func (q *Queries) DeleteCartItemForCustomerOrg(ctx context.Context, arg DeleteCartItemForCustomerOrgParams) error {
-	_, err := q.db.Exec(ctx, deleteCartItemForCustomerOrg, arg.CartItemID, arg.CustomerOrgID)
+func (q *Queries) DeleteCartItemForBuyerOrg(ctx context.Context, arg DeleteCartItemForBuyerOrgParams) error {
+	_, err := q.db.Exec(ctx, deleteCartItemForBuyerOrg, arg.CartItemID, arg.BuyerOrgID)
 	return err
 }
 
-const getCartItemForCustomerOrg = `-- name: GetCartItemForCustomerOrg :one
+const getCartItemForBuyerOrg = `-- name: GetCartItemForBuyerOrg :one
 SELECT
     i.id, i.cart_shop_group_id, i.product_variant_id, i.quantity, i.unit_price, i.is_selected, i.created_at, i.updated_at,
     g.cart_id
@@ -44,15 +44,15 @@ FROM
     JOIN carts c ON c.id = g.cart_id
 WHERE
     i.id = $1
-    AND c.customer_org_id = $2
+    AND c.buyer_org_id = $2
 `
 
-type GetCartItemForCustomerOrgParams struct {
-	CartItemID    uuid.UUID `json:"cart_item_id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+type GetCartItemForBuyerOrgParams struct {
+	CartItemID uuid.UUID `json:"cart_item_id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
 }
 
-type GetCartItemForCustomerOrgRow struct {
+type GetCartItemForBuyerOrgRow struct {
 	ID               uuid.UUID       `json:"id"`
 	CartShopGroupID  uuid.UUID       `json:"cart_shop_group_id"`
 	ProductVariantID uuid.UUID       `json:"product_variant_id"`
@@ -64,9 +64,9 @@ type GetCartItemForCustomerOrgRow struct {
 	CartID           uuid.UUID       `json:"cart_id"`
 }
 
-func (q *Queries) GetCartItemForCustomerOrg(ctx context.Context, arg GetCartItemForCustomerOrgParams) (GetCartItemForCustomerOrgRow, error) {
-	row := q.db.QueryRow(ctx, getCartItemForCustomerOrg, arg.CartItemID, arg.CustomerOrgID)
-	var i GetCartItemForCustomerOrgRow
+func (q *Queries) GetCartItemForBuyerOrg(ctx context.Context, arg GetCartItemForBuyerOrgParams) (GetCartItemForBuyerOrgRow, error) {
+	row := q.db.QueryRow(ctx, getCartItemForBuyerOrg, arg.CartItemID, arg.BuyerOrgID)
+	var i GetCartItemForBuyerOrgRow
 	err := row.Scan(
 		&i.ID,
 		&i.CartShopGroupID,
@@ -81,7 +81,7 @@ func (q *Queries) GetCartItemForCustomerOrg(ctx context.Context, arg GetCartItem
 	return i, err
 }
 
-const setCartItemSelectedForCustomerOrg = `-- name: SetCartItemSelectedForCustomerOrg :one
+const setCartItemSelectedForBuyerOrg = `-- name: SetCartItemSelectedForBuyerOrg :one
 UPDATE
     cart_items i
 SET
@@ -93,19 +93,19 @@ WHERE
     i.id = $2
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = $3
+    AND c.buyer_org_id = $3
 RETURNING
     i.id, i.cart_shop_group_id, i.product_variant_id, i.quantity, i.unit_price, i.is_selected, i.created_at, i.updated_at
 `
 
-type SetCartItemSelectedForCustomerOrgParams struct {
-	IsSelected    bool      `json:"is_selected"`
-	CartItemID    uuid.UUID `json:"cart_item_id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+type SetCartItemSelectedForBuyerOrgParams struct {
+	IsSelected bool      `json:"is_selected"`
+	CartItemID uuid.UUID `json:"cart_item_id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
 }
 
-func (q *Queries) SetCartItemSelectedForCustomerOrg(ctx context.Context, arg SetCartItemSelectedForCustomerOrgParams) (CartItem, error) {
-	row := q.db.QueryRow(ctx, setCartItemSelectedForCustomerOrg, arg.IsSelected, arg.CartItemID, arg.CustomerOrgID)
+func (q *Queries) SetCartItemSelectedForBuyerOrg(ctx context.Context, arg SetCartItemSelectedForBuyerOrgParams) (CartItem, error) {
+	row := q.db.QueryRow(ctx, setCartItemSelectedForBuyerOrg, arg.IsSelected, arg.CartItemID, arg.BuyerOrgID)
 	var i CartItem
 	err := row.Scan(
 		&i.ID,
@@ -120,7 +120,7 @@ func (q *Queries) SetCartItemSelectedForCustomerOrg(ctx context.Context, arg Set
 	return i, err
 }
 
-const setCartItemsSelectedByGroupForCustomerOrg = `-- name: SetCartItemsSelectedByGroupForCustomerOrg :exec
+const setCartItemsSelectedByGroupForBuyerOrg = `-- name: SetCartItemsSelectedByGroupForBuyerOrg :exec
 UPDATE
     cart_items i
 SET
@@ -132,21 +132,21 @@ WHERE
     i.cart_shop_group_id = g.id
     AND g.id = $2
     AND g.cart_id = c.id
-    AND c.customer_org_id = $3
+    AND c.buyer_org_id = $3
 `
 
-type SetCartItemsSelectedByGroupForCustomerOrgParams struct {
+type SetCartItemsSelectedByGroupForBuyerOrgParams struct {
 	IsSelected      bool      `json:"is_selected"`
 	CartShopGroupID uuid.UUID `json:"cart_shop_group_id"`
-	CustomerOrgID   uuid.UUID `json:"customer_org_id"`
+	BuyerOrgID      uuid.UUID `json:"buyer_org_id"`
 }
 
-func (q *Queries) SetCartItemsSelectedByGroupForCustomerOrg(ctx context.Context, arg SetCartItemsSelectedByGroupForCustomerOrgParams) error {
-	_, err := q.db.Exec(ctx, setCartItemsSelectedByGroupForCustomerOrg, arg.IsSelected, arg.CartShopGroupID, arg.CustomerOrgID)
+func (q *Queries) SetCartItemsSelectedByGroupForBuyerOrg(ctx context.Context, arg SetCartItemsSelectedByGroupForBuyerOrgParams) error {
+	_, err := q.db.Exec(ctx, setCartItemsSelectedByGroupForBuyerOrg, arg.IsSelected, arg.CartShopGroupID, arg.BuyerOrgID)
 	return err
 }
 
-const updateCartItemQuantityForCustomerOrg = `-- name: UpdateCartItemQuantityForCustomerOrg :one
+const updateCartItemQuantityForBuyerOrg = `-- name: UpdateCartItemQuantityForBuyerOrg :one
 UPDATE
     cart_items i
 SET
@@ -158,19 +158,19 @@ WHERE
     i.id = $2
     AND i.cart_shop_group_id = g.id
     AND g.cart_id = c.id
-    AND c.customer_org_id = $3
+    AND c.buyer_org_id = $3
 RETURNING
     i.id, i.cart_shop_group_id, i.product_variant_id, i.quantity, i.unit_price, i.is_selected, i.created_at, i.updated_at
 `
 
-type UpdateCartItemQuantityForCustomerOrgParams struct {
-	Quantity      int16     `json:"quantity"`
-	CartItemID    uuid.UUID `json:"cart_item_id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+type UpdateCartItemQuantityForBuyerOrgParams struct {
+	Quantity   int16     `json:"quantity"`
+	CartItemID uuid.UUID `json:"cart_item_id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
 }
 
-func (q *Queries) UpdateCartItemQuantityForCustomerOrg(ctx context.Context, arg UpdateCartItemQuantityForCustomerOrgParams) (CartItem, error) {
-	row := q.db.QueryRow(ctx, updateCartItemQuantityForCustomerOrg, arg.Quantity, arg.CartItemID, arg.CustomerOrgID)
+func (q *Queries) UpdateCartItemQuantityForBuyerOrg(ctx context.Context, arg UpdateCartItemQuantityForBuyerOrgParams) (CartItem, error) {
+	row := q.db.QueryRow(ctx, updateCartItemQuantityForBuyerOrg, arg.Quantity, arg.CartItemID, arg.BuyerOrgID)
 	var i CartItem
 	err := row.Scan(
 		&i.ID,

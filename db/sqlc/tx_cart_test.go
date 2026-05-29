@@ -18,13 +18,13 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		variant := createActiveVariantForCart(t, sellerOrg)
 
 		result, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         2,
 		})
 		require.NoError(t, err)
 		cleanupCart(t, result.Cart.ID)
-		require.Equal(t, buyerOrg.ID, result.Cart.CustomerOrgID)
+		require.Equal(t, buyerOrg.ID, result.Cart.BuyerOrgID)
 		require.Equal(t, result.Cart.ID, result.ShopGroup.CartID)
 		require.Equal(t, sellerOrg.ID, result.ShopGroup.MerchantOrgID)
 		require.Equal(t, variant.ID, result.Item.ProductVariantID)
@@ -49,7 +49,7 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		variant := createActiveVariantForCart(t, sellerOrg)
 
 		first, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         1,
 		})
@@ -57,7 +57,7 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		cleanupCart(t, first.Cart.ID)
 
 		second, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         3,
 		})
@@ -79,7 +79,7 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		variantB := createActiveVariantForCart(t, sellerOrg)
 
 		first, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variantA.ID,
 			Quantity:         1,
 		})
@@ -87,14 +87,14 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		cleanupCart(t, first.Cart.ID)
 
 		_, err = testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    first.Item.ID,
 			IsSelected:    false,
 		})
 		require.NoError(t, err)
 
 		second, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variantB.ID,
 			Quantity:         1,
 		})
@@ -103,12 +103,12 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		require.False(t, second.UpdatedGroup.IsSelected)
 	})
 
-	t.Run("fail/rejects_seller_org_as_customer_org", func(t *testing.T) {
+	t.Run("fail/rejects_seller_org_as_buyer_org", func(t *testing.T) {
 		sellerOrg := createSellerOrganization(t)
 		variant := createActiveVariantForCart(t, sellerOrg)
 
 		_, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    sellerOrg.ID,
+			BuyerOrgID:    sellerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         1,
 		})
@@ -121,7 +121,7 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		variant := createRandomProductVariantWithOrg(t, sellerOrg)
 
 		_, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         1,
 		})
@@ -134,7 +134,7 @@ func TestSQLStore_AddCartItemTx(t *testing.T) {
 		variant := createActiveVariantForCart(t, sellerOrg)
 
 		_, err := testStore.AddCartItemTx(t.Context(), db.AddCartItemTxParams{
-			CustomerOrgID:    buyerOrg.ID,
+			BuyerOrgID:    buyerOrg.ID,
 			ProductVariantID: variant.ID,
 			Quantity:         0,
 		})
@@ -158,7 +158,7 @@ func TestSQLStore_UpdateCartItemQuantityTx(t *testing.T) {
 		require.NoError(t, err)
 
 		result, err := testStore.UpdateCartItemQuantityTx(t.Context(), db.UpdateCartItemQuantityTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    item.ID,
 			Quantity:      5,
 		})
@@ -167,7 +167,7 @@ func TestSQLStore_UpdateCartItemQuantityTx(t *testing.T) {
 		require.True(t, result.UpdatedGroup.Subtotal.Equal(decimal.NewFromInt(50)))
 	})
 
-	t.Run("fail/wrong_customer_org_returns_not_found", func(t *testing.T) {
+	t.Run("fail/wrong_buyer_org_returns_not_found", func(t *testing.T) {
 		_, _, _, group, variant := createCartFixture(t)
 		otherBuyerOrg := createBuyerOrganization(t)
 		item, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
@@ -179,7 +179,7 @@ func TestSQLStore_UpdateCartItemQuantityTx(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = testStore.UpdateCartItemQuantityTx(t.Context(), db.UpdateCartItemQuantityTxParams{
-			CustomerOrgID: otherBuyerOrg.ID,
+			BuyerOrgID: otherBuyerOrg.ID,
 			CartItemID:    item.ID,
 			Quantity:      5,
 		})
@@ -197,7 +197,7 @@ func TestSQLStore_UpdateCartItemQuantityTx(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = testStore.UpdateCartItemQuantityTx(t.Context(), db.UpdateCartItemQuantityTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    item.ID,
 			Quantity:      0,
 		})
@@ -226,7 +226,7 @@ func TestSQLStore_SetCartItemSelectedTx(t *testing.T) {
 		require.NoError(t, err)
 
 		selected, err := testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 			IsSelected:    true,
 		})
@@ -235,7 +235,7 @@ func TestSQLStore_SetCartItemSelectedTx(t *testing.T) {
 		require.True(t, selected.UpdatedGroup.IsSelected)
 
 		unselected, err := testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 			IsSelected:    false,
 		})
@@ -244,7 +244,7 @@ func TestSQLStore_SetCartItemSelectedTx(t *testing.T) {
 		require.False(t, unselected.UpdatedGroup.IsSelected)
 
 		reselected, err := testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 			IsSelected:    true,
 		})
@@ -253,7 +253,7 @@ func TestSQLStore_SetCartItemSelectedTx(t *testing.T) {
 		require.True(t, reselected.UpdatedGroup.IsSelected)
 	})
 
-	t.Run("fail/wrong_customer_org_returns_not_found", func(t *testing.T) {
+	t.Run("fail/wrong_buyer_org_returns_not_found", func(t *testing.T) {
 		_, _, _, group, variant := createCartFixture(t)
 		otherBuyerOrg := createBuyerOrganization(t)
 		item, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
@@ -265,7 +265,7 @@ func TestSQLStore_SetCartItemSelectedTx(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: otherBuyerOrg.ID,
+			BuyerOrgID: otherBuyerOrg.ID,
 			CartItemID:    item.ID,
 			IsSelected:    false,
 		})
@@ -285,7 +285,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.NoError(t, err)
 
 		err = testStore.RemoveCartItemTx(t.Context(), db.RemoveCartItemTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    item.ID,
 		})
 		require.NoError(t, err)
@@ -294,14 +294,14 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, details)
 
-		_, err = testStore.SetCartShopGroupSelectedForCustomerOrg(t.Context(), db.SetCartShopGroupSelectedForCustomerOrgParams{
+		_, err = testStore.SetCartShopGroupSelectedForBuyerOrg(t.Context(), db.SetCartShopGroupSelectedForBuyerOrgParams{
 			CartShopGroupID: group.ID,
-			CustomerOrgID:   buyerOrg.ID,
+			BuyerOrgID:   buyerOrg.ID,
 			IsSelected:      true,
 		})
 		require.ErrorIs(t, err, db.ErrNotFound)
 
-		cartAfter, err := testStore.GetCartByCustomerOrgID(t.Context(), buyerOrg.ID)
+		cartAfter, err := testStore.GetCartByBuyerOrgID(t.Context(), buyerOrg.ID)
 		require.NoError(t, err)
 		require.Equal(t, cart.ID, cartAfter.ID)
 	})
@@ -330,7 +330,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.NoError(t, err)
 
 		err = testStore.RemoveCartItemTx(t.Context(), db.RemoveCartItemTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 		})
 		require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.NoError(t, err)
 
 		result, err := testStore.SetCartItemSelectedTx(t.Context(), db.SetCartItemSelectedTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 			IsSelected:    false,
 		})
@@ -368,7 +368,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.False(t, result.UpdatedGroup.IsSelected)
 
 		err = testStore.RemoveCartItemTx(t.Context(), db.RemoveCartItemTxParams{
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 			CartItemID:    itemA.ID,
 		})
 		require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.True(t, details[0].ItemIsSelected)
 	})
 
-	t.Run("fail/wrong_customer_org_returns_not_found", func(t *testing.T) {
+	t.Run("fail/wrong_buyer_org_returns_not_found", func(t *testing.T) {
 		_, _, _, group, variant := createCartFixture(t)
 		otherBuyerOrg := createBuyerOrganization(t)
 		item, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
@@ -392,7 +392,7 @@ func TestSQLStore_RemoveCartItemTx(t *testing.T) {
 		require.NoError(t, err)
 
 		err = testStore.RemoveCartItemTx(t.Context(), db.RemoveCartItemTxParams{
-			CustomerOrgID: otherBuyerOrg.ID,
+			BuyerOrgID: otherBuyerOrg.ID,
 			CartItemID:    item.ID,
 		})
 		require.ErrorIs(t, err, db.ErrNotFound)
@@ -411,42 +411,42 @@ func TestSQLStore_SetCartShopGroupSelectedTx(t *testing.T) {
 		require.NoError(t, err)
 
 		result, err := testStore.SetCartShopGroupSelectedTx(t.Context(), db.SetCartShopGroupSelectedTxParams{
-			CustomerOrgID:   buyerOrg.ID,
+			BuyerOrgID:   buyerOrg.ID,
 			CartShopGroupID: group.ID,
 			IsSelected:      false,
 		})
 		require.NoError(t, err)
 		require.False(t, result.ShopGroup.IsSelected)
 
-		updatedItem, err := testStore.GetCartItemForCustomerOrg(t.Context(), db.GetCartItemForCustomerOrgParams{
+		updatedItem, err := testStore.GetCartItemForBuyerOrg(t.Context(), db.GetCartItemForBuyerOrgParams{
 			CartItemID:    item.ID,
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 		})
 		require.NoError(t, err)
 		require.False(t, updatedItem.IsSelected)
 
 		result, err = testStore.SetCartShopGroupSelectedTx(t.Context(), db.SetCartShopGroupSelectedTxParams{
-			CustomerOrgID:   buyerOrg.ID,
+			BuyerOrgID:   buyerOrg.ID,
 			CartShopGroupID: group.ID,
 			IsSelected:      true,
 		})
 		require.NoError(t, err)
 		require.True(t, result.ShopGroup.IsSelected)
 
-		updatedItem, err = testStore.GetCartItemForCustomerOrg(t.Context(), db.GetCartItemForCustomerOrgParams{
+		updatedItem, err = testStore.GetCartItemForBuyerOrg(t.Context(), db.GetCartItemForBuyerOrgParams{
 			CartItemID:    item.ID,
-			CustomerOrgID: buyerOrg.ID,
+			BuyerOrgID: buyerOrg.ID,
 		})
 		require.NoError(t, err)
 		require.True(t, updatedItem.IsSelected)
 	})
 
-	t.Run("fail/wrong_customer_org_returns_not_found", func(t *testing.T) {
+	t.Run("fail/wrong_buyer_org_returns_not_found", func(t *testing.T) {
 		_, _, _, group, _ := createCartFixture(t)
 		otherBuyerOrg := createBuyerOrganization(t)
 
 		_, err := testStore.SetCartShopGroupSelectedTx(t.Context(), db.SetCartShopGroupSelectedTxParams{
-			CustomerOrgID:   otherBuyerOrg.ID,
+			BuyerOrgID:   otherBuyerOrg.ID,
 			CartShopGroupID: group.ID,
 			IsSelected:      false,
 		})

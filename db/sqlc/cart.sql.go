@@ -14,43 +14,43 @@ import (
 
 const createCart = `-- name: CreateCart :one
 INSERT INTO
-    carts (customer_org_id)
+    carts (buyer_org_id)
 VALUES
-    ($1) ON CONFLICT (customer_org_id) DO
+    ($1) ON CONFLICT (buyer_org_id) DO
 UPDATE
 SET
-    customer_org_id = EXCLUDED.customer_org_id
+    buyer_org_id = EXCLUDED.buyer_org_id
 RETURNING
-    id, customer_org_id, created_at, updated_at
+    id, buyer_org_id, created_at, updated_at
 `
 
-func (q *Queries) CreateCart(ctx context.Context, customerOrgID uuid.UUID) (Cart, error) {
-	row := q.db.QueryRow(ctx, createCart, customerOrgID)
+func (q *Queries) CreateCart(ctx context.Context, buyerOrgID uuid.UUID) (Cart, error) {
+	row := q.db.QueryRow(ctx, createCart, buyerOrgID)
 	var i Cart
 	err := row.Scan(
 		&i.ID,
-		&i.CustomerOrgID,
+		&i.BuyerOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getCartByCustomerOrgID = `-- name: GetCartByCustomerOrgID :one
+const getCartByBuyerOrgID = `-- name: GetCartByBuyerOrgID :one
 SELECT
-    id, customer_org_id, created_at, updated_at
+    id, buyer_org_id, created_at, updated_at
 FROM
     carts
 WHERE
-    customer_org_id = $1
+    buyer_org_id = $1
 `
 
-func (q *Queries) GetCartByCustomerOrgID(ctx context.Context, customerOrgID uuid.UUID) (Cart, error) {
-	row := q.db.QueryRow(ctx, getCartByCustomerOrgID, customerOrgID)
+func (q *Queries) GetCartByBuyerOrgID(ctx context.Context, buyerOrgID uuid.UUID) (Cart, error) {
+	row := q.db.QueryRow(ctx, getCartByBuyerOrgID, buyerOrgID)
 	var i Cart
 	err := row.Scan(
 		&i.ID,
-		&i.CustomerOrgID,
+		&i.BuyerOrgID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -60,7 +60,7 @@ func (q *Queries) GetCartByCustomerOrgID(ctx context.Context, customerOrgID uuid
 const getCartDetails = `-- name: GetCartDetails :many
 SELECT
     c.id AS cart_id,
-    c.customer_org_id,
+    c.buyer_org_id,
     g.id AS cart_shop_group_id,
     g.merchant_org_id,
     merchant.name AS merchant_name,
@@ -116,7 +116,7 @@ FROM
             1
     ) thumbnail ON TRUE
 WHERE
-    c.customer_org_id = $1
+    c.buyer_org_id = $1
 ORDER BY
     merchant.name,
     p.name,
@@ -125,7 +125,7 @@ ORDER BY
 
 type GetCartDetailsRow struct {
 	CartID            uuid.UUID       `json:"cart_id"`
-	CustomerOrgID     uuid.UUID       `json:"customer_org_id"`
+	BuyerOrgID        uuid.UUID       `json:"buyer_org_id"`
 	CartShopGroupID   uuid.UUID       `json:"cart_shop_group_id"`
 	MerchantOrgID     uuid.UUID       `json:"merchant_org_id"`
 	MerchantName      string          `json:"merchant_name"`
@@ -148,8 +148,8 @@ type GetCartDetailsRow struct {
 	ThumbnailSource   string          `json:"thumbnail_source"`
 }
 
-func (q *Queries) GetCartDetails(ctx context.Context, customerOrgID uuid.UUID) ([]GetCartDetailsRow, error) {
-	rows, err := q.db.Query(ctx, getCartDetails, customerOrgID)
+func (q *Queries) GetCartDetails(ctx context.Context, buyerOrgID uuid.UUID) ([]GetCartDetailsRow, error) {
+	rows, err := q.db.Query(ctx, getCartDetails, buyerOrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (q *Queries) GetCartDetails(ctx context.Context, customerOrgID uuid.UUID) (
 		var i GetCartDetailsRow
 		if err := rows.Scan(
 			&i.CartID,
-			&i.CustomerOrgID,
+			&i.BuyerOrgID,
 			&i.CartShopGroupID,
 			&i.MerchantOrgID,
 			&i.MerchantName,
@@ -191,7 +191,7 @@ func (q *Queries) GetCartDetails(ctx context.Context, customerOrgID uuid.UUID) (
 	return items, nil
 }
 
-const getCartItemDetailsForCustomerOrg = `-- name: GetCartItemDetailsForCustomerOrg :one
+const getCartItemDetailsForBuyerOrg = `-- name: GetCartItemDetailsForBuyerOrg :one
 SELECT
     i.id AS cart_item_id,
     i.product_variant_id,
@@ -214,15 +214,15 @@ FROM
     JOIN products p ON p.id = v.product_id
 WHERE
     i.id = $1
-    AND c.customer_org_id = $2
+    AND c.buyer_org_id = $2
 `
 
-type GetCartItemDetailsForCustomerOrgParams struct {
-	CartItemID    uuid.UUID `json:"cart_item_id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
+type GetCartItemDetailsForBuyerOrgParams struct {
+	CartItemID uuid.UUID `json:"cart_item_id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
 }
 
-type GetCartItemDetailsForCustomerOrgRow struct {
+type GetCartItemDetailsForBuyerOrgRow struct {
 	CartItemID       uuid.UUID       `json:"cart_item_id"`
 	ProductVariantID uuid.UUID       `json:"product_variant_id"`
 	Quantity         int16           `json:"quantity"`
@@ -238,9 +238,9 @@ type GetCartItemDetailsForCustomerOrgRow struct {
 	ProductStatus    string          `json:"product_status"`
 }
 
-func (q *Queries) GetCartItemDetailsForCustomerOrg(ctx context.Context, arg GetCartItemDetailsForCustomerOrgParams) (GetCartItemDetailsForCustomerOrgRow, error) {
-	row := q.db.QueryRow(ctx, getCartItemDetailsForCustomerOrg, arg.CartItemID, arg.CustomerOrgID)
-	var i GetCartItemDetailsForCustomerOrgRow
+func (q *Queries) GetCartItemDetailsForBuyerOrg(ctx context.Context, arg GetCartItemDetailsForBuyerOrgParams) (GetCartItemDetailsForBuyerOrgRow, error) {
+	row := q.db.QueryRow(ctx, getCartItemDetailsForBuyerOrg, arg.CartItemID, arg.BuyerOrgID)
+	var i GetCartItemDetailsForBuyerOrgRow
 	err := row.Scan(
 		&i.CartItemID,
 		&i.ProductVariantID,

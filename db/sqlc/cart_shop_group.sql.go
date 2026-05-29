@@ -141,7 +141,7 @@ func (q *Queries) RecalculateCartShopGroupSubtotal(ctx context.Context, id uuid.
 	return i, err
 }
 
-const setCartShopGroupSelectedForCustomerOrg = `-- name: SetCartShopGroupSelectedForCustomerOrg :one
+const setCartShopGroupSelectedForBuyerOrg = `-- name: SetCartShopGroupSelectedForBuyerOrg :one
 UPDATE
     cart_shop_groups g
 SET
@@ -151,19 +151,19 @@ FROM
 WHERE
     g.id = $2
     AND g.cart_id = c.id
-    AND c.customer_org_id = $3
+    AND c.buyer_org_id = $3
 RETURNING
     g.id, g.cart_id, g.merchant_org_id, g.is_selected, g.subtotal, g.created_at, g.updated_at
 `
 
-type SetCartShopGroupSelectedForCustomerOrgParams struct {
+type SetCartShopGroupSelectedForBuyerOrgParams struct {
 	IsSelected      bool      `json:"is_selected"`
 	CartShopGroupID uuid.UUID `json:"cart_shop_group_id"`
-	CustomerOrgID   uuid.UUID `json:"customer_org_id"`
+	BuyerOrgID      uuid.UUID `json:"buyer_org_id"`
 }
 
-func (q *Queries) SetCartShopGroupSelectedForCustomerOrg(ctx context.Context, arg SetCartShopGroupSelectedForCustomerOrgParams) (CartShopGroup, error) {
-	row := q.db.QueryRow(ctx, setCartShopGroupSelectedForCustomerOrg, arg.IsSelected, arg.CartShopGroupID, arg.CustomerOrgID)
+func (q *Queries) SetCartShopGroupSelectedForBuyerOrg(ctx context.Context, arg SetCartShopGroupSelectedForBuyerOrgParams) (CartShopGroup, error) {
+	row := q.db.QueryRow(ctx, setCartShopGroupSelectedForBuyerOrg, arg.IsSelected, arg.CartShopGroupID, arg.BuyerOrgID)
 	var i CartShopGroup
 	err := row.Scan(
 		&i.ID,

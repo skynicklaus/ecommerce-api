@@ -78,68 +78,68 @@ func TestCartItemScopedMutations(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	t.Run("update_quantity_scoped_to_customer_org", func(t *testing.T) {
-		updated, updateErr := testStore.UpdateCartItemQuantityForCustomerOrg(
+	t.Run("update_quantity_scoped_to_buyer_org", func(t *testing.T) {
+		updated, updateErr := testStore.UpdateCartItemQuantityForBuyerOrg(
 			t.Context(),
-			db.UpdateCartItemQuantityForCustomerOrgParams{
+			db.UpdateCartItemQuantityForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: buyerOrg.ID,
+				BuyerOrgID: buyerOrg.ID,
 				Quantity:      4,
 			},
 		)
 		require.NoError(t, updateErr)
 		require.Equal(t, int16(4), updated.Quantity)
 
-		_, updateErr = testStore.UpdateCartItemQuantityForCustomerOrg(
+		_, updateErr = testStore.UpdateCartItemQuantityForBuyerOrg(
 			t.Context(),
-			db.UpdateCartItemQuantityForCustomerOrgParams{
+			db.UpdateCartItemQuantityForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: otherBuyerOrg.ID,
+				BuyerOrgID: otherBuyerOrg.ID,
 				Quantity:      1,
 			},
 		)
 		require.ErrorIs(t, updateErr, db.ErrNotFound)
 	})
 
-	t.Run("set_item_selected_scoped_to_customer_org", func(t *testing.T) {
-		updated, updateErr := testStore.SetCartItemSelectedForCustomerOrg(
+	t.Run("set_item_selected_scoped_to_buyer_org", func(t *testing.T) {
+		updated, updateErr := testStore.SetCartItemSelectedForBuyerOrg(
 			t.Context(),
-			db.SetCartItemSelectedForCustomerOrgParams{
+			db.SetCartItemSelectedForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: buyerOrg.ID,
+				BuyerOrgID: buyerOrg.ID,
 				IsSelected:    false,
 			},
 		)
 		require.NoError(t, updateErr)
 		require.False(t, updated.IsSelected)
 
-		_, updateErr = testStore.SetCartItemSelectedForCustomerOrg(
+		_, updateErr = testStore.SetCartItemSelectedForBuyerOrg(
 			t.Context(),
-			db.SetCartItemSelectedForCustomerOrgParams{
+			db.SetCartItemSelectedForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: otherBuyerOrg.ID,
+				BuyerOrgID: otherBuyerOrg.ID,
 				IsSelected:    true,
 			},
 		)
 		require.ErrorIs(t, updateErr, db.ErrNotFound)
 	})
 
-	t.Run("set_group_items_selected_scoped_to_customer_org", func(t *testing.T) {
-		updateErr := testStore.SetCartItemsSelectedByGroupForCustomerOrg(
+	t.Run("set_group_items_selected_scoped_to_buyer_org", func(t *testing.T) {
+		updateErr := testStore.SetCartItemsSelectedByGroupForBuyerOrg(
 			t.Context(),
-			db.SetCartItemsSelectedByGroupForCustomerOrgParams{
+			db.SetCartItemsSelectedByGroupForBuyerOrgParams{
 				CartShopGroupID: group.ID,
-				CustomerOrgID:   buyerOrg.ID,
+				BuyerOrgID:   buyerOrg.ID,
 				IsSelected:      false,
 			},
 		)
 		require.NoError(t, updateErr)
 
-		updated, updateErr := testStore.SetCartItemSelectedForCustomerOrg(
+		updated, updateErr := testStore.SetCartItemSelectedForBuyerOrg(
 			t.Context(),
-			db.SetCartItemSelectedForCustomerOrgParams{
+			db.SetCartItemSelectedForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: buyerOrg.ID,
+				BuyerOrgID: buyerOrg.ID,
 				IsSelected:    true,
 			},
 		)
@@ -147,12 +147,12 @@ func TestCartItemScopedMutations(t *testing.T) {
 		require.True(t, updated.IsSelected)
 	})
 
-	t.Run("delete_item_scoped_to_customer_org", func(t *testing.T) {
-		deleteErr := testStore.DeleteCartItemForCustomerOrg(
+	t.Run("delete_item_scoped_to_buyer_org", func(t *testing.T) {
+		deleteErr := testStore.DeleteCartItemForBuyerOrg(
 			t.Context(),
-			db.DeleteCartItemForCustomerOrgParams{
+			db.DeleteCartItemForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: otherBuyerOrg.ID,
+				BuyerOrgID: otherBuyerOrg.ID,
 			},
 		)
 		require.NoError(t, deleteErr)
@@ -161,11 +161,11 @@ func TestCartItemScopedMutations(t *testing.T) {
 		require.NoError(t, detailsErr)
 		require.Len(t, details, 1)
 
-		deleteErr = testStore.DeleteCartItemForCustomerOrg(
+		deleteErr = testStore.DeleteCartItemForBuyerOrg(
 			t.Context(),
-			db.DeleteCartItemForCustomerOrgParams{
+			db.DeleteCartItemForBuyerOrgParams{
 				CartItemID:    item.ID,
-				CustomerOrgID: buyerOrg.ID,
+				BuyerOrgID: buyerOrg.ID,
 			},
 		)
 		require.NoError(t, deleteErr)

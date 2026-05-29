@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -46,10 +47,10 @@ type AttributeValue struct {
 }
 
 type Cart struct {
-	ID            uuid.UUID `json:"id"`
-	CustomerOrgID uuid.UUID `json:"customer_org_id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID         uuid.UUID `json:"id"`
+	BuyerOrgID uuid.UUID `json:"buyer_org_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type CartItem struct {
@@ -83,6 +84,27 @@ type Category struct {
 	SortOrder      int16      `json:"sort_order"`
 	IsActive       bool       `json:"is_active"`
 	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type CheckoutSession struct {
+	ID                  uuid.UUID       `json:"id"`
+	BuyerCustomerID     uuid.UUID       `json:"buyer_customer_id"`
+	BuyerOrgID          uuid.UUID       `json:"buyer_org_id"`
+	BuyerMemberID       uuid.UUID       `json:"buyer_member_id"`
+	Status              string          `json:"status"`
+	IdempotencyKey      *string         `json:"idempotency_key"`
+	CheckoutFingerprint string          `json:"checkout_fingerprint"`
+	Subtotal            decimal.Decimal `json:"subtotal"`
+	TaxTotal            decimal.Decimal `json:"tax_total"`
+	ShippingTotal       decimal.Decimal `json:"shipping_total"`
+	DiscountTotal       decimal.Decimal `json:"discount_total"`
+	GrandTotal          decimal.Decimal `json:"grand_total"`
+	Currency            string          `json:"currency"`
+	ExpiresAt           *time.Time      `json:"expires_at"`
+	CompletedAt         *time.Time      `json:"completed_at"`
+	CancelledAt         *time.Time      `json:"cancelled_at"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
 }
 
 type Customer struct {
@@ -128,6 +150,29 @@ type Inventory struct {
 	IsActive          bool      `json:"is_active"`
 }
 
+type InventoryReservation struct {
+	ID                uuid.UUID  `json:"id"`
+	CheckoutSessionID uuid.UUID  `json:"checkout_session_id"`
+	OrderID           uuid.UUID  `json:"order_id"`
+	BuyerOrgID        uuid.UUID  `json:"buyer_org_id"`
+	MerchantOrgID     uuid.UUID  `json:"merchant_org_id"`
+	Status            string     `json:"status"`
+	ExpiresAt         time.Time  `json:"expires_at"`
+	ConfirmedAt       *time.Time `json:"confirmed_at"`
+	ReleasedAt        *time.Time `json:"released_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
+type InventoryReservationItem struct {
+	ID               uuid.UUID `json:"id"`
+	ReservationID    uuid.UUID `json:"reservation_id"`
+	OrderItemID      uuid.UUID `json:"order_item_id"`
+	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	WarehouseID      int64     `json:"warehouse_id"`
+	Quantity         int32     `json:"quantity"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
 type Member struct {
 	ID             uuid.UUID `json:"id"`
 	IdentityID     uuid.UUID `json:"identity_id"`
@@ -142,6 +187,71 @@ type MemberRole struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type Order struct {
+	ID                      uuid.UUID       `json:"id"`
+	CheckoutSessionID       uuid.UUID       `json:"checkout_session_id"`
+	MerchantOrgID           uuid.UUID       `json:"merchant_org_id"`
+	BuyerCustomerID         uuid.UUID       `json:"buyer_customer_id"`
+	BuyerOrgID              uuid.UUID       `json:"buyer_org_id"`
+	BuyerMemberID           uuid.UUID       `json:"buyer_member_id"`
+	OrderNumber             string          `json:"order_number"`
+	Status                  string          `json:"status"`
+	PaymentStatus           string          `json:"payment_status"`
+	FulfillmentStatus       string          `json:"fulfillment_status"`
+	CustomerEmail           string          `json:"customer_email"`
+	CustomerName            string          `json:"customer_name"`
+	BillingAddressSnapshot  []byte          `json:"billing_address_snapshot"`
+	ShippingAddressSnapshot []byte          `json:"shipping_address_snapshot"`
+	Subtotal                decimal.Decimal `json:"subtotal"`
+	TaxTotal                decimal.Decimal `json:"tax_total"`
+	ShippingTotal           decimal.Decimal `json:"shipping_total"`
+	ShippingDiscount        decimal.Decimal `json:"shipping_discount"`
+	CouponDiscount          decimal.Decimal `json:"coupon_discount"`
+	GrandTotal              decimal.Decimal `json:"grand_total"`
+	Currency                string          `json:"currency"`
+	PlacedAt                *time.Time      `json:"placed_at"`
+	PaidAt                  *time.Time      `json:"paid_at"`
+	CancelledAt             *time.Time      `json:"cancelled_at"`
+	DeliveredAt             *time.Time      `json:"delivered_at"`
+	CompletedAt             *time.Time      `json:"completed_at"`
+	CreatedAt               time.Time       `json:"created_at"`
+	UpdatedAt               time.Time       `json:"updated_at"`
+}
+
+type OrderItem struct {
+	ID                uuid.UUID       `json:"id"`
+	OrderID           uuid.UUID       `json:"order_id"`
+	ProductID         *uuid.UUID      `json:"product_id"`
+	ProductVariantID  *uuid.UUID      `json:"product_variant_id"`
+	WarehouseID       pgtype.Int8     `json:"warehouse_id"`
+	ProductName       string          `json:"product_name"`
+	ProductSlug       *string         `json:"product_slug"`
+	VariantName       string          `json:"variant_name"`
+	Sku               string          `json:"sku"`
+	VariantAttributes []byte          `json:"variant_attributes"`
+	ThumbnailAssetKey *string         `json:"thumbnail_asset_key"`
+	Quantity          int32           `json:"quantity"`
+	UnitPrice         decimal.Decimal `json:"unit_price"`
+	Subtotal          decimal.Decimal `json:"subtotal"`
+	DiscountTotal     decimal.Decimal `json:"discount_total"`
+	TaxTotal          decimal.Decimal `json:"tax_total"`
+	Total             decimal.Decimal `json:"total"`
+	Currency          string          `json:"currency"`
+	CreatedAt         time.Time       `json:"created_at"`
+}
+
+type OrderStatusHistory struct {
+	ID                uuid.UUID  `json:"id"`
+	OrderID           uuid.UUID  `json:"order_id"`
+	FromStatus        *string    `json:"from_status"`
+	ToStatus          string     `json:"to_status"`
+	Note              *string    `json:"note"`
+	ActorType         string     `json:"actor_type"`
+	ChangedByMemberID *uuid.UUID `json:"changed_by_member_id"`
+	Metadata          []byte     `json:"metadata"`
+	CreatedAt         time.Time  `json:"created_at"`
+}
+
 type Organization struct {
 	ID         uuid.UUID  `json:"id"`
 	ParentID   *uuid.UUID `json:"parent_id"`
@@ -153,6 +263,36 @@ type Organization struct {
 	Logo       *string    `json:"logo"`
 	Metadata   []byte     `json:"metadata"`
 	CreatedAt  time.Time  `json:"created_at"`
+}
+
+type Payment struct {
+	ID                uuid.UUID       `json:"id"`
+	CheckoutSessionID uuid.UUID       `json:"checkout_session_id"`
+	BuyerOrgID        uuid.UUID       `json:"buyer_org_id"`
+	Provider          string          `json:"provider"`
+	ProviderPaymentID *string         `json:"provider_payment_id"`
+	Status            string          `json:"status"`
+	Amount            decimal.Decimal `json:"amount"`
+	Currency          string          `json:"currency"`
+	Metadata          []byte          `json:"metadata"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+type PaymentTransaction struct {
+	ID             uuid.UUID       `json:"id"`
+	PaymentID      uuid.UUID       `json:"payment_id"`
+	Type           string          `json:"type"`
+	Status         string          `json:"status"`
+	Provider       string          `json:"provider"`
+	ProviderRef    *string         `json:"provider_ref"`
+	Amount         decimal.Decimal `json:"amount"`
+	Currency       string          `json:"currency"`
+	FailureCode    *string         `json:"failure_code"`
+	FailureMessage *string         `json:"failure_message"`
+	Metadata       []byte          `json:"metadata"`
+	ProcessedAt    *time.Time      `json:"processed_at"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 type Product struct {

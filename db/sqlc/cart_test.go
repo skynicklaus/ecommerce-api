@@ -100,19 +100,19 @@ func TestCreateCartQueries(t *testing.T) {
 		cart1, err := testStore.CreateCart(t.Context(), buyerOrg.ID)
 		require.NoError(t, err)
 		cleanupCart(t, cart1.ID)
-		require.Equal(t, buyerOrg.ID, cart1.CustomerOrgID)
+		require.Equal(t, buyerOrg.ID, cart1.BuyerOrgID)
 		require.NotZero(t, cart1.ID)
 
 		cart2, err := testStore.CreateCart(t.Context(), buyerOrg.ID)
 		require.NoError(t, err)
 		require.Equal(t, cart1.ID, cart2.ID)
 
-		fetched, err := testStore.GetCartByCustomerOrgID(t.Context(), buyerOrg.ID)
+		fetched, err := testStore.GetCartByBuyerOrgID(t.Context(), buyerOrg.ID)
 		require.NoError(t, err)
 		require.Equal(t, cart1.ID, fetched.ID)
 	})
 
-	t.Run("rejects_seller_org_as_customer_org", func(t *testing.T) {
+	t.Run("rejects_seller_org_as_buyer_org", func(t *testing.T) {
 		sellerOrg := createSellerOrganization(t)
 
 		_, err := testStore.CreateCart(t.Context(), sellerOrg.ID)
@@ -147,7 +147,7 @@ func TestGetCartDetails(t *testing.T) {
 	require.Len(t, details, 1)
 
 	row := details[0]
-	require.Equal(t, buyerOrg.ID, row.CustomerOrgID)
+	require.Equal(t, buyerOrg.ID, row.BuyerOrgID)
 	require.Equal(t, group.ID, row.CartShopGroupID)
 	require.Equal(t, sellerOrg.ID, row.MerchantOrgID)
 	require.Equal(t, sellerOrg.Name, row.MerchantName)
@@ -181,4 +181,76 @@ func TestGetCartDetails(t *testing.T) {
 	require.Len(t, details, 1)
 	require.Equal(t, variantAssetKey, details[0].ThumbnailAssetKey)
 	require.Equal(t, "variant", details[0].ThumbnailSource)
+}
+
+func TestCheckoutCartQueries(t *testing.T) {
+	buyerOrg, sellerOrg, _, group, variantA := createCartFixture(t)
+	variantB := createActiveVariantForCart(t, sellerOrg)
+
+	itemA, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
+		CartShopGroupID:  group.ID,
+		ProductVariantID: variantA.ID,
+		Quantity:         1,
+		UnitPrice:        decimal.NewFromInt(11),
+	})
+	require.NoError(t, err)
+	itemB, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
+		CartShopGroupID:  group.ID,
+		ProductVariantID: variantB.ID,
+		Quantity:         1,
+		UnitPrice:        decimal.NewFromInt(12),
+	})
+	require.NoError(t, err)
+
+	selectedRows, err := testStore.ListSelectedCartItemsForCheckout(t.Context(), buyerOrg.ID)
+	require.NoError(t, err)
+	require.Len(t, selectedRows, 2)
+
+	deletedRows, err := testStore.DeleteSelectedCartItemsForCheckout(
+		t.Context(),
+		db.DeleteSelectedCartItemsForCheckoutParams{
+			BuyerOrgID:  buyerOrg.ID,
+			CartItemIds: []uuid.UUID{itemA.ID},
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, deletedRows, 1)
+	require.Equal(t, itemA.ID, deletedRows[0].ID)
+
+	remainingRows, err := testStore.GetCartDetails(t.Context(), buyerOrg.ID)
+	require.NoError(t, err)
+	require.Len(t, remainingRows, 1)
+	require.Equal(t, itemB.ID, remainingRows[0].CartItemID)
+
+	otherBuyerOrg := createBuyerOrganization(t)
+	otherCart, err := testStore.CreateCart(t.Context(), otherBuyerOrg.ID)
+	require.NoError(t, err)
+	cleanupCart(t, otherCart.ID)
+	otherGroup, err := testStore.GetOrCreateCartShopGroup(t.Context(), db.GetOrCreateCartShopGroupParams{
+		CartID:        otherCart.ID,
+		MerchantOrgID: sellerOrg.ID,
+	})
+	require.NoError(t, err)
+	otherItem, err := testStore.UpsertCartItem(t.Context(), db.UpsertCartItemParams{
+		CartShopGroupID:  otherGroup.ID,
+		ProductVariantID: variantA.ID,
+		Quantity:         1,
+		UnitPrice:        decimal.NewFromInt(13),
+	})
+	require.NoError(t, err)
+
+	deletedRows, err = testStore.DeleteSelectedCartItemsForCheckout(
+		t.Context(),
+		db.DeleteSelectedCartItemsForCheckoutParams{
+			BuyerOrgID:  buyerOrg.ID,
+			CartItemIds: []uuid.UUID{otherItem.ID},
+		},
+	)
+	require.NoError(t, err)
+	require.Empty(t, deletedRows)
+
+	otherRows, err := testStore.GetCartDetails(t.Context(), otherBuyerOrg.ID)
+	require.NoError(t, err)
+	require.Len(t, otherRows, 1)
+	require.Equal(t, otherItem.ID, otherRows[0].CartItemID)
 }

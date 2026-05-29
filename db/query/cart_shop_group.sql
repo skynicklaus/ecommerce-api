@@ -9,7 +9,7 @@ SET
 RETURNING
     *;
 
--- name: SetCartShopGroupSelectedForCustomerOrg :one
+-- name: SetCartShopGroupSelectedForBuyerOrg :one
 UPDATE
     cart_shop_groups g
 SET
@@ -19,7 +19,7 @@ FROM
 WHERE
     g.id = sqlc.arg('cart_shop_group_id')
     AND g.cart_id = c.id
-    AND c.customer_org_id = sqlc.arg('customer_org_id')
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id')
 RETURNING
     g.*;
 

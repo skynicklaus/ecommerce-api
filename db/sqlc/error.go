@@ -50,6 +50,13 @@ func IsUniqueViolation(err error) bool {
 
 // db custom error
 var (
-	ErrMismatchOrganizationType = errors.New("organization type mismatch")
-	ErrInvalidUserType          = errors.New("invalid user type")
+	ErrMismatchOrganizationType   = errors.New("organization type mismatch")
+	ErrInvalidUserType            = errors.New("invalid user type")
+	ErrInsufficientInventory      = errors.New("insufficient inventory")
+	ErrInvalidPaymentState        = errors.New("invalid payment state")
+	ErrInvalidCheckoutState       = errors.New("invalid checkout state")
+	ErrInvalidInventoryState      = errors.New("invalid inventory state")
+	ErrEmptyCheckout              = errors.New("empty checkout")
+	ErrUnavailableCheckoutItem    = errors.New("unavailable checkout item")
+	ErrUnsupportedPaymentProvider = errors.New("unsupported payment provider")
 )

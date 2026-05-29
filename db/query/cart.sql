@@ -1,23 +1,23 @@
 -- name: CreateCart :one
 INSERT INTO
-    carts (customer_org_id)
+    carts (buyer_org_id)
 VALUES
-    ($1) ON CONFLICT (customer_org_id) DO
+    ($1) ON CONFLICT (buyer_org_id) DO
 UPDATE
 SET
-    customer_org_id = EXCLUDED.customer_org_id
+    buyer_org_id = EXCLUDED.buyer_org_id
 RETURNING
     *;
 
--- name: GetCartByCustomerOrgID :one
+-- name: GetCartByBuyerOrgID :one
 SELECT
     *
 FROM
     carts
 WHERE
-    customer_org_id = $1;
+    buyer_org_id = $1;
 
--- name: GetCartItemDetailsForCustomerOrg :one
+-- name: GetCartItemDetailsForBuyerOrg :one
 SELECT
     i.id AS cart_item_id,
     i.product_variant_id,
@@ -40,12 +40,12 @@ FROM
     JOIN products p ON p.id = v.product_id
 WHERE
     i.id = sqlc.arg('cart_item_id')
-    AND c.customer_org_id = sqlc.arg('customer_org_id');
+    AND c.buyer_org_id = sqlc.arg('buyer_org_id');
 
 -- name: GetCartDetails :many
 SELECT
     c.id AS cart_id,
-    c.customer_org_id,
+    c.buyer_org_id,
     g.id AS cart_shop_group_id,
     g.merchant_org_id,
     merchant.name AS merchant_name,
@@ -101,7 +101,7 @@ FROM
             1
     ) thumbnail ON TRUE
 WHERE
-    c.customer_org_id = $1
+    c.buyer_org_id = $1
 ORDER BY
     merchant.name,
     p.name,

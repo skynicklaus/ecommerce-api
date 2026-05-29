@@ -212,3 +212,122 @@ WHERE
     AND i.warehouse_id = sqlc.arg('warehouse_id')::BIGINT
 LIMIT
     1;
+
+-- name: ReserveInventoryForCheckout :one
+UPDATE
+    inventories
+SET
+    quantity_reserved = quantity_reserved + sqlc.arg('quantity')::INT
+WHERE
+    product_variant_id = sqlc.arg('product_variant_id')::UUID
+    AND warehouse_id = sqlc.arg('warehouse_id')::BIGINT
+    AND sqlc.arg('quantity')::INT > 0
+    AND is_active = TRUE
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = sqlc.arg('warehouse_id')::BIGINT
+        WHERE
+            pv.id = sqlc.arg('product_variant_id')::UUID
+            AND pv.organization_id = sqlc.arg('merchant_org_id')::UUID
+            AND w.organization_id = sqlc.arg('merchant_org_id')::UUID
+    )
+    AND quantity_on_hand - quantity_reserved >= sqlc.arg('quantity')::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active;
+
+-- name: ReleaseReservedInventory :one
+UPDATE
+    inventories
+SET
+    quantity_reserved = quantity_reserved - sqlc.arg('quantity')::INT
+WHERE
+    product_variant_id = sqlc.arg('product_variant_id')::UUID
+    AND warehouse_id = sqlc.arg('warehouse_id')::BIGINT
+    AND sqlc.arg('quantity')::INT > 0
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = sqlc.arg('warehouse_id')::BIGINT
+        WHERE
+            pv.id = sqlc.arg('product_variant_id')::UUID
+            AND pv.organization_id = sqlc.arg('merchant_org_id')::UUID
+            AND w.organization_id = sqlc.arg('merchant_org_id')::UUID
+    )
+    AND quantity_reserved >= sqlc.arg('quantity')::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active;
+
+-- name: ConfirmReservedInventory :one
+UPDATE
+    inventories
+SET
+    quantity_on_hand = quantity_on_hand - sqlc.arg('quantity')::INT,
+    quantity_reserved = quantity_reserved - sqlc.arg('quantity')::INT
+WHERE
+    product_variant_id = sqlc.arg('product_variant_id')::UUID
+    AND warehouse_id = sqlc.arg('warehouse_id')::BIGINT
+    AND sqlc.arg('quantity')::INT > 0
+    AND EXISTS (
+        SELECT
+            1
+        FROM
+            product_variants pv
+            JOIN warehouses w ON w.id = sqlc.arg('warehouse_id')::BIGINT
+        WHERE
+            pv.id = sqlc.arg('product_variant_id')::UUID
+            AND pv.organization_id = sqlc.arg('merchant_org_id')::UUID
+            AND w.organization_id = sqlc.arg('merchant_org_id')::UUID
+    )
+    AND quantity_reserved >= sqlc.arg('quantity')::INT
+    AND quantity_on_hand >= sqlc.arg('quantity')::INT
+RETURNING
+    product_variant_id,
+    warehouse_id,
+    quantity_on_hand,
+    quantity_reserved,
+    quantity_available,
+    low_stock_threshold,
+    is_active;
+
+-- name: ListInventoryCandidatesForCheckoutItem :many
+SELECT
+    i.product_variant_id,
+    i.warehouse_id,
+    i.quantity_on_hand,
+    i.quantity_reserved,
+    i.quantity_available,
+    i.low_stock_threshold,
+    i.is_active
+FROM
+    inventories i
+    JOIN product_variants pv ON pv.id = i.product_variant_id
+    JOIN warehouses w ON w.id = i.warehouse_id
+WHERE
+    i.product_variant_id = sqlc.arg('product_variant_id')::UUID
+    AND pv.organization_id = sqlc.arg('merchant_org_id')::UUID
+    AND w.organization_id = sqlc.arg('merchant_org_id')::UUID
+    AND i.is_active = TRUE
+    AND w.is_active = TRUE
+    AND i.quantity_on_hand - i.quantity_reserved >= sqlc.arg('quantity')::INT
+ORDER BY
+    i.quantity_available DESC,
+    i.warehouse_id
+LIMIT
+    sqlc.arg('page_limit')::INT;
