@@ -99,3 +99,105 @@ const (
 	ProductStatusArchived  ProductStatus = "archived"
 	ProductStatusSuspended ProductStatus = "suspended"
 )
+
+type CheckoutSessionStatus string
+
+const (
+	CheckoutSessionStatusPending        CheckoutSessionStatus = "pending"
+	CheckoutSessionStatusReserved       CheckoutSessionStatus = "reserved"
+	CheckoutSessionStatusPaymentPending CheckoutSessionStatus = "payment_pending"
+	CheckoutSessionStatusCompleted      CheckoutSessionStatus = "completed"
+	CheckoutSessionStatusCancelled      CheckoutSessionStatus = "cancelled"
+	CheckoutSessionStatusExpired        CheckoutSessionStatus = "expired"
+	CheckoutSessionStatusFailed         CheckoutSessionStatus = "failed"
+)
+
+type OrderStatus string
+
+const (
+	OrderStatusPendingPayment OrderStatus = "pending_payment"
+	OrderStatusPlaced         OrderStatus = "placed"
+	OrderStatusProcessing     OrderStatus = "processing"
+	OrderStatusCancelled      OrderStatus = "cancelled"
+	OrderStatusExpired        OrderStatus = "expired"
+	OrderStatusCompleted      OrderStatus = "completed"
+)
+
+type OrderPaymentStatus string
+
+const (
+	OrderPaymentStatusUnpaid            OrderPaymentStatus = "unpaid"
+	OrderPaymentStatusAuthorized        OrderPaymentStatus = "authorized"
+	OrderPaymentStatusPaid              OrderPaymentStatus = "paid"
+	OrderPaymentStatusFailed            OrderPaymentStatus = "failed"
+	OrderPaymentStatusPartiallyRefunded OrderPaymentStatus = "partially_refunded"
+	OrderPaymentStatusRefunded          OrderPaymentStatus = "refunded"
+)
+
+type OrderFulfillmentStatus string
+
+const (
+	OrderFulfillmentStatusUnfulfilled OrderFulfillmentStatus = "unfulfilled"
+	OrderFulfillmentStatusProcessing  OrderFulfillmentStatus = "processing"
+	OrderFulfillmentStatusShipped     OrderFulfillmentStatus = "shipped"
+	OrderFulfillmentStatusDelivered   OrderFulfillmentStatus = "delivered"
+	OrderFulfillmentStatusReturned    OrderFulfillmentStatus = "returned"
+)
+
+type InventoryReservationStatus string
+
+const (
+	InventoryReservationStatusActive    InventoryReservationStatus = "active"
+	InventoryReservationStatusConfirmed InventoryReservationStatus = "confirmed"
+	InventoryReservationStatusReleased  InventoryReservationStatus = "released"
+	InventoryReservationStatusExpired   InventoryReservationStatus = "expired"
+	InventoryReservationStatusCancelled InventoryReservationStatus = "cancelled"
+)
+
+type OrderStatusHistoryActorType string
+
+const (
+	OrderStatusHistoryActorTypeCustomer        OrderStatusHistoryActorType = "customer"
+	OrderStatusHistoryActorTypeMerchantMember  OrderStatusHistoryActorType = "merchant_member"
+	OrderStatusHistoryActorTypePlatformMember  OrderStatusHistoryActorType = "platform_member"
+	OrderStatusHistoryActorTypeSystem          OrderStatusHistoryActorType = "system"
+	OrderStatusHistoryActorTypePaymentProvider OrderStatusHistoryActorType = "payment_provider"
+)
+
+type PaymentProvider string
+
+const (
+	PaymentProviderManual PaymentProvider = "manual"
+)
+
+type PaymentStatus string
+
+const (
+	PaymentStatusPending           PaymentStatus = "pending"
+	PaymentStatusRequiresAction    PaymentStatus = "requires_action"
+	PaymentStatusAuthorized        PaymentStatus = "authorized"
+	PaymentStatusSucceeded         PaymentStatus = "succeeded"
+	PaymentStatusFailed            PaymentStatus = "failed"
+	PaymentStatusCancelled         PaymentStatus = "cancelled"
+	PaymentStatusPartiallyRefunded PaymentStatus = "partially_refunded"
+	PaymentStatusRefunded          PaymentStatus = "refunded"
+)
+
+type PaymentTransactionType string
+
+const (
+	PaymentTransactionTypeAuthorize PaymentTransactionType = "authorize"
+	PaymentTransactionTypeCapture   PaymentTransactionType = "capture"
+	PaymentTransactionTypeSale      PaymentTransactionType = "sale"
+	PaymentTransactionTypeRefund    PaymentTransactionType = "refund"
+	PaymentTransactionTypeVoid      PaymentTransactionType = "void"
+)
+
+type PaymentTransactionStatus string
+
+const (
+	PaymentTransactionStatusPending   PaymentTransactionStatus = "pending"
+	PaymentTransactionStatusSucceeded PaymentTransactionStatus = "succeeded"
+	PaymentTransactionStatusFailed    PaymentTransactionStatus = "failed"
+	PaymentTransactionStatusCancelled PaymentTransactionStatus = "cancelled"
+)
