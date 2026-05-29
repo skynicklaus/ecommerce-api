@@ -66,13 +66,13 @@ func TestCartHandlers_Integration(t *testing.T) {
 
 		var resp CartResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		require.Equal(t, fixture.buyerOrg.ID, resp.CustomerOrgID)
+		require.Equal(t, fixture.buyerOrg.ID, resp.BuyerOrgID)
 		require.Empty(t, resp.Groups)
 	})
 
 	t.Run("get_existing_cart_does_not_write", func(t *testing.T) {
 		_ = getCartForTest(t, fixture)
-		before, err := fixture.store.GetCartByCustomerOrgID(t.Context(), fixture.buyerOrg.ID)
+		before, err := fixture.store.GetCartByBuyerOrgID(t.Context(), fixture.buyerOrg.ID)
 		require.NoError(t, err)
 		time.Sleep(10 * time.Millisecond)
 
@@ -82,7 +82,7 @@ func TestCartHandlers_Integration(t *testing.T) {
 		fixture.router.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
 
-		after, err := fixture.store.GetCartByCustomerOrgID(t.Context(), fixture.buyerOrg.ID)
+		after, err := fixture.store.GetCartByBuyerOrgID(t.Context(), fixture.buyerOrg.ID)
 		require.NoError(t, err)
 		require.Equal(t, before.UpdatedAt, after.UpdatedAt)
 	})
@@ -394,6 +394,9 @@ func newCartHandlerFixture(t *testing.T) cartHandlerFixture {
 		r.Patch("/v1/cart/items/{id}/selected", makeTestHandler(h.SetCartItemSelected))
 		r.Delete("/v1/cart/items/{id}", makeTestHandler(h.RemoveCartItem))
 		r.Patch("/v1/cart/shop-groups/{id}/selected", makeTestHandler(h.SetCartShopGroupSelected))
+		r.Post("/v1/checkout", makeTestHandler(h.CreateCheckout))
+		r.Post("/v1/checkout/{id}/cancel", makeTestHandler(h.CancelCheckout))
+		r.Post("/v1/payments/{id}/confirm", makeTestHandler(h.ConfirmManualPayment))
 	})
 
 	buyerOrg := createCartHandlerOrganization(

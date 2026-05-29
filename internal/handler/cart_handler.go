@@ -62,7 +62,7 @@ type CartShopGroupResponse struct {
 
 type CartResponse struct {
 	ID               uuid.UUID               `json:"id"`
-	CustomerOrgID    uuid.UUID               `json:"customerOrgId"`
+	BuyerOrgID       uuid.UUID               `json:"buyerOrgId"`
 	Subtotal         decimal.Decimal         `json:"subtotal"`
 	SelectedSubtotal decimal.Decimal         `json:"selectedSubtotal"`
 	TotalQuantity    int32                   `json:"totalQuantity"`
@@ -92,23 +92,23 @@ type CartShopGroupMutationResponse struct {
 //	@Router			/cart [get]
 func (h *V1Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
 
-	cart, err := h.store.GetCartByCustomerOrgID(ctx, customerOrgID)
+	cart, err := h.store.GetCartByBuyerOrgID(ctx, buyerOrgID)
 	if err != nil {
 		if !errors.Is(err, db.ErrNotFound) {
 			return fmt.Errorf("failed to get cart: %w", err)
 		}
-		cart, err = h.store.CreateCart(ctx, customerOrgID)
+		cart, err = h.store.CreateCart(ctx, buyerOrgID)
 		if err != nil {
 			return mapCartWriteError(err)
 		}
 	}
 
-	details, err := h.store.GetCartDetails(ctx, customerOrgID)
+	details, err := h.store.GetCartDetails(ctx, buyerOrgID)
 	if err != nil {
 		return fmt.Errorf("failed to get cart details: %w", err)
 	}
@@ -137,7 +137,7 @@ func (h *V1Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
 //	@Router			/cart/items [post]
 func (h *V1Handler) AddCartItem(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (h *V1Handler) AddCartItem(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	result, err := h.store.AddCartItemTx(ctx, db.AddCartItemTxParams{
-		CustomerOrgID:    customerOrgID,
+		BuyerOrgID:       buyerOrgID,
 		ProductVariantID: req.ProductVariantID,
 		Quantity:         req.Quantity,
 	})
@@ -184,7 +184,7 @@ func (h *V1Handler) AddCartItem(w http.ResponseWriter, r *http.Request) error {
 //	@Router			/cart/items/{id} [patch]
 func (h *V1Handler) UpdateCartItemQuantity(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
@@ -202,17 +202,17 @@ func (h *V1Handler) UpdateCartItemQuantity(w http.ResponseWriter, r *http.Reques
 	}
 
 	result, err := h.store.UpdateCartItemQuantityTx(ctx, db.UpdateCartItemQuantityTxParams{
-		CustomerOrgID: customerOrgID,
-		CartItemID:    cartItemID,
-		Quantity:      req.Quantity,
+		BuyerOrgID: buyerOrgID,
+		CartItemID: cartItemID,
+		Quantity:   req.Quantity,
 	})
 	if err != nil {
 		return mapCartWriteError(err)
 	}
 
-	detail, err := h.store.GetCartItemDetailsForCustomerOrg(ctx, db.GetCartItemDetailsForCustomerOrgParams{
-		CartItemID:    result.Item.ID,
-		CustomerOrgID: customerOrgID,
+	detail, err := h.store.GetCartItemDetailsForBuyerOrg(ctx, db.GetCartItemDetailsForBuyerOrgParams{
+		CartItemID: result.Item.ID,
+		BuyerOrgID: buyerOrgID,
 	})
 	if err != nil {
 		return mapCartWriteError(err)
@@ -243,7 +243,7 @@ func (h *V1Handler) UpdateCartItemQuantity(w http.ResponseWriter, r *http.Reques
 //	@Router			/cart/items/{id}/selected [patch]
 func (h *V1Handler) SetCartItemSelected(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
@@ -261,17 +261,17 @@ func (h *V1Handler) SetCartItemSelected(w http.ResponseWriter, r *http.Request) 
 	}
 
 	result, err := h.store.SetCartItemSelectedTx(ctx, db.SetCartItemSelectedTxParams{
-		CartItemID:    cartItemID,
-		CustomerOrgID: customerOrgID,
-		IsSelected:    *req.IsSelected,
+		CartItemID: cartItemID,
+		BuyerOrgID: buyerOrgID,
+		IsSelected: *req.IsSelected,
 	})
 	if err != nil {
 		return mapCartWriteError(err)
 	}
 
-	detail, err := h.store.GetCartItemDetailsForCustomerOrg(ctx, db.GetCartItemDetailsForCustomerOrgParams{
-		CartItemID:    result.Item.ID,
-		CustomerOrgID: customerOrgID,
+	detail, err := h.store.GetCartItemDetailsForBuyerOrg(ctx, db.GetCartItemDetailsForBuyerOrgParams{
+		CartItemID: result.Item.ID,
+		BuyerOrgID: buyerOrgID,
 	})
 	if err != nil {
 		return mapCartWriteError(err)
@@ -296,7 +296,7 @@ func (h *V1Handler) SetCartItemSelected(w http.ResponseWriter, r *http.Request) 
 //	@Router			/cart/items/{id} [delete]
 func (h *V1Handler) RemoveCartItem(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
@@ -306,8 +306,8 @@ func (h *V1Handler) RemoveCartItem(w http.ResponseWriter, r *http.Request) error
 	}
 
 	if err = h.store.RemoveCartItemTx(ctx, db.RemoveCartItemTxParams{
-		CustomerOrgID: customerOrgID,
-		CartItemID:    cartItemID,
+		BuyerOrgID: buyerOrgID,
+		CartItemID: cartItemID,
 	}); err != nil {
 		return mapCartWriteError(err)
 	}
@@ -336,7 +336,7 @@ func (h *V1Handler) RemoveCartItem(w http.ResponseWriter, r *http.Request) error
 //	@Router			/cart/shop-groups/{id}/selected [patch]
 func (h *V1Handler) SetCartShopGroupSelected(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	customerOrgID, err := customerOrgIDFromCtx(ctx)
+	buyerOrgID, err := buyerOrgIDFromCtx(ctx)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (h *V1Handler) SetCartShopGroupSelected(w http.ResponseWriter, r *http.Requ
 	}
 
 	_, err = h.store.SetCartShopGroupSelectedTx(ctx, db.SetCartShopGroupSelectedTxParams{
-		CustomerOrgID:   customerOrgID,
+		BuyerOrgID:      buyerOrgID,
 		CartShopGroupID: shopGroupID,
 		IsSelected:      *req.IsSelected,
 	})
@@ -362,11 +362,11 @@ func (h *V1Handler) SetCartShopGroupSelected(w http.ResponseWriter, r *http.Requ
 		return mapCartWriteError(err)
 	}
 
-	cart, err := h.store.GetCartByCustomerOrgID(ctx, customerOrgID)
+	cart, err := h.store.GetCartByBuyerOrgID(ctx, buyerOrgID)
 	if err != nil {
 		return mapCartWriteError(err)
 	}
-	details, err := h.store.GetCartDetails(ctx, customerOrgID)
+	details, err := h.store.GetCartDetails(ctx, buyerOrgID)
 	if err != nil {
 		return fmt.Errorf("failed to get cart details: %w", err)
 	}
@@ -380,7 +380,7 @@ func (h *V1Handler) SetCartShopGroupSelected(w http.ResponseWriter, r *http.Requ
 	return apierror.NewAPIError(http.StatusNotFound, errors.New("cart resource not found"))
 }
 
-func customerOrgIDFromCtx(ctx context.Context) (uuid.UUID, error) {
+func buyerOrgIDFromCtx(ctx context.Context) (uuid.UUID, error) {
 	identity, err := middleware.GetIdentityFromContext(ctx)
 	if err != nil {
 		return uuid.Nil, apierror.NewAPIError(http.StatusUnauthorized, err)
@@ -415,7 +415,7 @@ func mapCartWriteError(err error) error {
 func (h *V1Handler) buildCartResponse(ctx context.Context, cart db.Cart, rows []db.GetCartDetailsRow) CartResponse {
 	resp := CartResponse{
 		ID:               cart.ID,
-		CustomerOrgID:    cart.CustomerOrgID,
+		BuyerOrgID:       cart.BuyerOrgID,
 		Subtotal:         decimal.Zero,
 		SelectedSubtotal: decimal.Zero,
 		TotalQuantity:    0,
@@ -525,7 +525,7 @@ func cartItemResponseFromTx(item db.CartItem, variant db.GetActiveVariantForCart
 	}
 }
 
-func cartItemResponseFromDetail(item db.GetCartItemDetailsForCustomerOrgRow) CartItemResponse {
+func cartItemResponseFromDetail(item db.GetCartItemDetailsForBuyerOrgRow) CartItemResponse {
 	return CartItemResponse{
 		ID:               item.CartItemID,
 		ProductVariantID: item.ProductVariantID,

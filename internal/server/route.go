@@ -88,6 +88,9 @@ func (s *Server) RegisterRoutes() http.Handler {
 			r.Patch("/cart/items/{id}/selected", s.make(v1Handler.SetCartItemSelected))
 			r.Delete("/cart/items/{id}", s.make(v1Handler.RemoveCartItem))
 			r.Patch("/cart/shop-groups/{id}/selected", s.make(v1Handler.SetCartShopGroupSelected))
+			r.Post("/checkout", s.make(v1Handler.CreateCheckout))
+			r.Post("/checkout/{id}/cancel", s.make(v1Handler.CancelCheckout))
+			r.Post("/payments/{id}/confirm", s.make(v1Handler.ConfirmManualPayment))
 		})
 
 		// Protected Merchant account/session routes.
