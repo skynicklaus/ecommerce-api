@@ -58,6 +58,18 @@ type Store interface {
 		context.Context,
 		SetCartShopGroupSelectedTxParams,
 	) (SetCartShopGroupSelectedTxResult, error)
+	CheckoutSelectedCartItemsTx(
+		context.Context,
+		CheckoutSelectedCartItemsTxParams,
+	) (CheckoutSelectedCartItemsTxResult, error)
+	ConfirmManualPaymentTx(
+		context.Context,
+		ConfirmManualPaymentTxParams,
+	) (ConfirmManualPaymentTxResult, error)
+	ReleaseCheckoutReservationsTx(
+		context.Context,
+		ReleaseCheckoutReservationsTxParams,
+	) (ReleaseCheckoutReservationsTxResult, error)
 }
 
 type SQLStore struct {
