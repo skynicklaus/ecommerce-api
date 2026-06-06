@@ -24,6 +24,10 @@ services:
   garage:
     image: dxflrs/garage:v2.3.0
     container_name: ecommerce-storage
+    networks:
+      default:
+        aliases:
+          - storage.localhost
     command: /garage server --single-node --default-bucket
     environment:
       GARAGE_DEFAULT_ACCESS_KEY: ${AWS_ACCESS_KEY_ID}
