@@ -47,8 +47,8 @@ type CreateProductRequest struct {
 	Name          string                `json:"name"          validate:"required"`
 	Slug          string                `json:"slug"          validate:"required"`
 	CategoryID    uuid.UUID             `json:"categoryId"    validate:"required"`
-	Description   json.RawMessage       `json:"description"   validate:"required" swaggertype:"object"`
-	Specification json.RawMessage       `json:"specification" validate:"required" swaggertype:"object"`
+	Description   json.RawMessage       `json:"description"   validate:"required"            swaggertype:"object"`
+	Specification json.RawMessage       `json:"specification" validate:"required"            swaggertype:"object"`
 	Assets        []ProductAssetRequest `json:"assets"`
 	Variants      []VariantRequest      `json:"variants"      validate:"required,min=1,dive"`
 }
@@ -580,9 +580,9 @@ type ProductDetailsResponse struct {
 	CategoryID     uuid.UUID         `json:"categoryId"`
 	Name           string            `json:"name"`
 	Slug           string            `json:"slug"`
-	Description    json.RawMessage   `json:"description" swaggertype:"object"`
+	Description    json.RawMessage   `json:"description"    swaggertype:"object"`
 	Status         string            `json:"status"`
-	Specification  json.RawMessage   `json:"specification" swaggertype:"object"`
+	Specification  json.RawMessage   `json:"specification"  swaggertype:"object"`
 	IsFeatured     bool              `json:"isFeatured"`
 	CreatedAt      time.Time         `json:"createdAt"`
 	UpdatedAt      time.Time         `json:"updatedAt"`
@@ -883,9 +883,17 @@ func (h *V1Handler) ListActiveProducts(w http.ResponseWriter, r *http.Request) e
 	return h.writeProductListResponse(ctx, w, rows, nextCursor)
 }
 
-func (h *V1Handler) searchActiveProducts(w http.ResponseWriter, r *http.Request, query string, limit int32) error {
+func (h *V1Handler) searchActiveProducts(
+	w http.ResponseWriter,
+	r *http.Request,
+	query string,
+	limit int32,
+) error {
 	if len(query) > maxSearchQueryLength {
-		return apierror.NewAPIError(http.StatusUnprocessableEntity, errors.New("search query too long"))
+		return apierror.NewAPIError(
+			http.StatusUnprocessableEntity,
+			errors.New("search query too long"),
+		)
 	}
 
 	afterRank, afterCreatedAt, afterID, cursorErr := decodeSearchCursor(r.URL.Query().Get("cursor"))
@@ -1084,7 +1092,12 @@ func encodeCursor(t time.Time, id uuid.UUID) string {
 }
 
 func encodeSearchCursor(rank float64, t time.Time, id uuid.UUID) string {
-	raw := fmt.Sprintf("%s:%d:%s", strconv.FormatFloat(rank, 'g', -1, 64), t.UnixNano(), id.String())
+	raw := fmt.Sprintf(
+		"%s:%d:%s",
+		strconv.FormatFloat(rank, 'g', -1, 64),
+		t.UnixNano(),
+		id.String(),
+	)
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
@@ -1826,7 +1839,10 @@ func (h *V1Handler) UpdateProduct(w http.ResponseWriter, r *http.Request) error 
 	return WriteJSON(w, http.StatusOK, result)
 }
 
-func unusedProductAssetKeys(existingAssets []db.ProductAsset, currentAssets []db.ProductAsset) []string {
+func unusedProductAssetKeys(
+	existingAssets []db.ProductAsset,
+	currentAssets []db.ProductAsset,
+) []string {
 	usedAssetKeys := make(map[string]struct{}, len(currentAssets))
 	for _, asset := range currentAssets {
 		usedAssetKeys[asset.AssetKey] = struct{}{}
