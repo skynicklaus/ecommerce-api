@@ -94,13 +94,23 @@ func TestCreateProduct_Integration(t *testing.T) {
 
 	// 5. Seed a Category
 	orgID := org.ID
-	category, err := store.CreateCategory(ctx, db.CreateCategoryParams{
+	parentCategory, err := store.CreateCategory(ctx, db.CreateCategoryParams{
 		OrganizationID: &orgID,
 		ParentID:       nil,
+		Name:           "Test E2E Parent Category",
+		Slug:           "e2e-parent-category-" + uuid.New().String()[:8],
+		Description:    nil,
+		SortOrder:      1,
+	})
+	require.NoError(t, err)
+
+	category, err := store.CreateCategory(ctx, db.CreateCategoryParams{
+		OrganizationID: &orgID,
+		ParentID:       &parentCategory.ID,
 		Name:           "Test E2E Category",
 		Slug:           "e2e-category-" + uuid.New().String()[:8],
 		Description:    nil,
-		SortOrder:      1,
+		SortOrder:      2,
 	})
 	require.NoError(t, err)
 
@@ -569,6 +579,11 @@ func TestCreateProduct_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, createdProductID, detailsID.ID)
 		require.Equal(t, "E2E Product Title", detailsID.Name)
+		require.Len(t, detailsID.CategoryPath, 2)
+		require.Equal(t, parentCategory.ID, detailsID.CategoryPath[0].ID)
+		require.Equal(t, parentCategory.Name, detailsID.CategoryPath[0].Name)
+		require.Equal(t, category.ID, detailsID.CategoryPath[1].ID)
+		require.Equal(t, category.Name, detailsID.CategoryPath[1].Name)
 		require.NotEmpty(t, detailsID.Assets)
 		require.Contains(t, detailsID.Assets[0].URL, "X-Amz-Signature")
 
@@ -702,11 +717,20 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 	})
 
 	// Seed Category
+	parentCategory, err := store.CreateCategory(ctx, db.CreateCategoryParams{
+		OrganizationID: &org.ID,
+		Name:           "E2E Parent Category",
+		Slug:           "e2e-parent-cat-" + uuid.New().String()[:8],
+		SortOrder:      1,
+	})
+	require.NoError(t, err)
+
 	category, err := store.CreateCategory(ctx, db.CreateCategoryParams{
 		OrganizationID: &org.ID,
+		ParentID:       &parentCategory.ID,
 		Name:           "E2E Category",
 		Slug:           "e2e-cat-" + uuid.New().String()[:8],
-		SortOrder:      1,
+		SortOrder:      2,
 	})
 	require.NoError(t, err)
 
@@ -814,6 +838,11 @@ func TestMerchantCatalogCRUD_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, productID, details.ID)
 		require.Equal(t, string(util.ProductStatusDraft), details.Status)
+		require.Len(t, details.CategoryPath, 2)
+		require.Equal(t, parentCategory.ID, details.CategoryPath[0].ID)
+		require.Equal(t, parentCategory.Name, details.CategoryPath[0].Name)
+		require.Equal(t, category.ID, details.CategoryPath[1].ID)
+		require.Equal(t, category.Name, details.CategoryPath[1].Name)
 	})
 
 	t.Run("merchant_update_duplicate_slug_returns_conflict", func(t *testing.T) {
