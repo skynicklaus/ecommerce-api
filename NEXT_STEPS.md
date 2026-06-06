@@ -153,6 +153,35 @@ Deferred checkout/order follow-ups:
 - Plan a separate webhook route group with HMAC verification before adding any non-manual payment provider. Do not reuse the customer-session-protected `/payments/{id}/confirm` handler for provider callbacks.
 - Surface cancel-and-replace explicitly in the checkout response. When a buyer POSTs `/checkout` and an active session with a different fingerprint is silently cancelled in favor of the new selection, the response should signal that the prior reservation was released.
 
+## SQL/query follow-ups
+
+- Storefront product responses should not return inactive variants:
+  - `/v1/products` already filters products with `products.status = 'active'`;
+  - public product list/detail should use active-only variant queries;
+  - merchant product list/detail should keep using all-variant queries so merchants can see inactive/omitted variants.
+- Fix product variant lifecycle consistency:
+  - `product_variants.is_active` defaults to `FALSE`;
+  - `GetActiveVariantForCart` and product search only use active variants;
+  - `UpdateProductVariant` currently updates retained variants but does not reactivate a previously inactive variant re-added by SKU;
+  - either make `UpdateProductVariant` set `is_active = TRUE` for retained variants or add an explicit activation query in the product transaction.
+- Consider replacing raw `UpdateProductStatus` usage with a product status transaction:
+  - publish should set product status to `active` and activate intended variants;
+  - archive should set product status to `archived` and deactivate variants;
+  - draft behavior should be explicitly defined, either leaving variants as-is or deactivating them.
+- Decide buyer order visibility semantics:
+  - `GetCheckoutSessionForBuyer`, `GetOrderForBuyer`, and `ListBuyerOrders` are currently scoped by buyer org;
+  - if buyer org members should share company orders, keep this;
+  - if checkouts/orders are member-private, add `buyer_member_id` scoping.
+- Decide cart ownership semantics:
+  - checkout selected cart items are scoped by `buyer_org_id`;
+  - this matches the current org-shared cart schema;
+  - if carts should be per member, add member ownership to the cart model and checkout queries.
+- Product search rebuild alias alignment:
+  - `db/query/product_search.sql` was updated to use `attribute_doc.attribute_values`, matching the migration function after formatting cleanup.
+- Add a defensive guard to `ListCategoryPath`:
+  - the recursive query is fine for valid trees;
+  - add a visited-path guard or depth cap before category management becomes user-editable at scale.
+
 ## Future async task service candidates: `hibiken/asynq`
 
 Use Asynq for retryable side effects and expensive background work. Keep correctness-critical state transitions inside DB transactions.
