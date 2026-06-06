@@ -18,7 +18,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_organization_created_id ON 
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_products_active_created_id ON products (created_at DESC, id DESC)
 WHERE
-    STATUS = 'active';
+    "status" = 'active';
 
 CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uq_products_organization_slug ON products (organization_id, slug);
 

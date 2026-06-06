@@ -33,18 +33,18 @@ SELECT
 GRANT USAGE ON SCHEMA public TO app_user;
 
 CREATE TABLE IF NOT EXISTS identities (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     "type" TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT check_identity_type CHECK (TYPE IN ('user', 'customer'))
+    CONSTRAINT check_identity_type CHECK ("type" IN ('user', 'customer'))
 );
 
 CREATE TABLE IF NOT EXISTS users (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     identity_id UUID NOT NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
-    email_verified BOOLEAN NOT NULL DEFAULT false,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     image TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 CREATE TABLE IF NOT EXISTS user_accounts (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     user_id UUID NOT NULL,
     account_id TEXT NOT NULL,
     provider_id TEXT NOT NULL,
@@ -72,11 +72,11 @@ CREATE TABLE IF NOT EXISTS user_accounts (
 );
 
 CREATE TABLE IF NOT EXISTS customers (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     identity_id UUID NOT NULL,
     name TEXT NOT NULL,
     email TEXT NOT NULL,
-    email_verified BOOLEAN NOT NULL DEFAULT false,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     image TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 CREATE TABLE IF NOT EXISTS customer_accounts (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     customer_id UUID NOT NULL,
     account_id TEXT NOT NULL,
     provider_id TEXT NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS customer_accounts (
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     identity_id UUID NOT NULL,
     active_organization_id UUID,
     token TEXT NOT NULL,
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE TABLE IF NOT EXISTS organizations (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     parent_id UUID,
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS organizations (
 );
 
 CREATE TABLE IF NOT EXISTS members (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     identity_id UUID NOT NULL,
     organization_id UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS member_roles (
 );
 
 CREATE TABLE IF NOT EXISTS addresses (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     organization_id UUID NOT NULL,
     "type" TEXT NOT NULL,
     label TEXT NOT NULL,
@@ -218,8 +218,8 @@ CREATE TABLE IF NOT EXISTS addresses (
     city TEXT NOT NULL,
     state TEXT NOT NULL,
     country TEXT NOT NULL,
-    is_default_shipping BOOL NOT NULL DEFAULT false,
-    is_default_billing BOOL NOT NULL DEFAULT false,
+    is_default_shipping BOOL NOT NULL DEFAULT FALSE,
+    is_default_billing BOOL NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_addresses_organization_id FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
@@ -231,11 +231,11 @@ CREATE TABLE IF NOT EXISTS addresses (
             'general'
         )
     ),
-    CONSTRAINT check_address_label_length CHECK (length(label) <= 100)
+    CONSTRAINT check_address_label_length CHECK (LENGTH(label) <= 100)
 );
 
 CREATE
-OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS
+OR REPLACE FUNCTION SET_UPDATED_AT() RETURNS TRIGGER AS
 $$
 BEGIN
 NEW.updated_at = NOW();
@@ -249,34 +249,34 @@ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_users_updated_at BEFORE
 UPDATE
-    ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON users FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_user_accounts_updated_at BEFORE
 UPDATE
-    ON user_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON user_accounts FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_customers_updated_at BEFORE
 UPDATE
-    ON customers FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON customers FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_customer_accounts_updated_at BEFORE
 UPDATE
-    ON customer_accounts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON customer_accounts FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_sessions_updated_at BEFORE
 UPDATE
-    ON sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON sessions FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_roles_updated_at BEFORE
 UPDATE
-    ON roles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON roles FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_addresses_updated_at BEFORE
 UPDATE
-    ON addresses FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON addresses FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE
-OR REPLACE FUNCTION protect_platform_org() RETURNS TRIGGER AS
+OR REPLACE FUNCTION PROTECT_PLATFORM_ORG() RETURNS TRIGGER AS
 $$
 BEGIN
 IF OLD.type = 'platform' THEN RAISE EXCEPTION 'Platform organization cannot be modified or deleted';
@@ -292,7 +292,7 @@ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_protect_platform_org BEFORE
 UPDATE
-    OR DELETE ON organizations FOR EACH ROW EXECUTE FUNCTION protect_platform_org();
+    OR DELETE ON organizations FOR EACH ROW EXECUTE FUNCTION PROTECT_PLATFORM_ORG();
 
 ALTER TABLE
     sessions
@@ -309,7 +309,7 @@ ALTER TABLE
 
 DROP TRIGGER IF EXISTS trg_protect_platform_org ON organizations;
 
-DROP FUNCTION IF EXISTS protect_platform_org() CASCADE;
+DROP FUNCTION IF EXISTS PROTECT_PLATFORM_ORG() CASCADE;
 
 DROP TRIGGER IF EXISTS trg_addresses_updated_at ON addresses;
 
@@ -325,7 +325,7 @@ DROP TRIGGER IF EXISTS trg_user_accounts_updated_at ON user_accounts;
 
 DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 
-DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS SET_UPDATED_AT() CASCADE;
 
 DROP TABLE addresses;
 

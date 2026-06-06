@@ -1,7 +1,7 @@
 -- +goose Up
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS carts (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     buyer_org_id UUID NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS carts (
 );
 
 CREATE TABLE IF NOT EXISTS cart_shop_groups (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     cart_id UUID NOT NULL,
     merchant_org_id UUID NOT NULL,
     is_selected BOOLEAN NOT NULL DEFAULT false,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS cart_shop_groups (
 );
 
 CREATE TABLE IF NOT EXISTS cart_items (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     cart_shop_group_id UUID NOT NULL,
     product_variant_id UUID NOT NULL,
     quantity SMALLINT NOT NULL,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS cart_items (
 );
 
 CREATE TABLE IF NOT EXISTS checkout_sessions (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     buyer_customer_id UUID NOT NULL,
     buyer_org_id UUID NOT NULL,
     buyer_member_id UUID NOT NULL,
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
         AND discount_total >= 0
         AND grand_total >= 0
     ),
-    CONSTRAINT check_checkout_sessions_currency CHECK (length(currency) = 3),
+    CONSTRAINT check_checkout_sessions_currency CHECK (LENGTH(currency) = 3),
     CONSTRAINT check_checkout_sessions_terminal_timestamps CHECK (
         (
             "status" <> 'completed'
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
 );
 
 CREATE TABLE IF NOT EXISTS orders (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     checkout_session_id UUID NOT NULL,
     merchant_org_id UUID NOT NULL,
     buyer_customer_id UUID NOT NULL,
@@ -160,11 +160,11 @@ CREATE TABLE IF NOT EXISTS orders (
         AND coupon_discount >= 0
         AND grand_total >= 0
     ),
-    CONSTRAINT check_orders_currency CHECK (length(currency) = 3)
+    CONSTRAINT check_orders_currency CHECK (LENGTH(currency) = 3)
 );
 
 CREATE TABLE IF NOT EXISTS order_items (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     order_id UUID NOT NULL,
     product_id UUID,
     product_variant_id UUID,
@@ -201,11 +201,11 @@ CREATE TABLE IF NOT EXISTS order_items (
             AND tax_total >= 0
             AND total >= 0
         ),
-        CONSTRAINT check_order_items_currency CHECK (length(currency) = 3)
+        CONSTRAINT check_order_items_currency CHECK (LENGTH(currency) = 3)
 );
 
 CREATE TABLE IF NOT EXISTS inventory_reservations (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     checkout_session_id UUID NOT NULL,
     order_id UUID NOT NULL,
     buyer_org_id UUID NOT NULL,
@@ -231,7 +231,7 @@ CREATE TABLE IF NOT EXISTS inventory_reservations (
 );
 
 CREATE TABLE IF NOT EXISTS inventory_reservation_items (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     reservation_id UUID NOT NULL,
     order_item_id UUID NOT NULL,
     product_variant_id UUID NOT NULL,
@@ -246,7 +246,7 @@ CREATE TABLE IF NOT EXISTS inventory_reservation_items (
 );
 
 CREATE TABLE IF NOT EXISTS order_status_histories (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     order_id UUID NOT NULL,
     from_status TEXT,
     to_status TEXT NOT NULL,
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS order_status_histories (
 );
 
 CREATE TABLE IF NOT EXISTS payments (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     checkout_session_id UUID NOT NULL,
     buyer_org_id UUID NOT NULL,
     provider TEXT NOT NULL,
@@ -297,11 +297,11 @@ CREATE TABLE IF NOT EXISTS payments (
         )
     ),
     CONSTRAINT check_payments_amount_non_negative CHECK (amount >= 0),
-    CONSTRAINT check_payments_currency CHECK (length(currency) = 3)
+    CONSTRAINT check_payments_currency CHECK (LENGTH(currency) = 3)
 );
 
 CREATE TABLE IF NOT EXISTS payment_transactions (
-    id UUID NOT NULL PRIMARY KEY DEFAULT uuidv7(),
+    id UUID NOT NULL PRIMARY KEY DEFAULT UUIDV7(),
     payment_id UUID NOT NULL,
     "type" TEXT NOT NULL,
     "status" TEXT NOT NULL,
@@ -333,11 +333,11 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
         )
     ),
     CONSTRAINT check_payment_transactions_amount_non_negative CHECK (amount >= 0),
-    CONSTRAINT check_payment_transactions_currency CHECK (length(currency) = 3)
+    CONSTRAINT check_payment_transactions_currency CHECK (LENGTH(currency) = 3)
 );
 
 CREATE
-OR REPLACE FUNCTION validate_cart_buyer_org() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_CART_BUYER_ORG() RETURNS TRIGGER AS
 $$
 BEGIN
 IF NOT EXISTS (
@@ -360,7 +360,7 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_cart_shop_group_merchant_org() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_CART_SHOP_GROUP_MERCHANT_ORG() RETURNS TRIGGER AS
 $$
 BEGIN
 IF NOT EXISTS (
@@ -383,11 +383,11 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_buyer_context(
-    p_buyer_customer_id uuid,
-    p_buyer_org_id uuid,
-    p_buyer_member_id uuid
-) RETURNS void AS
+OR REPLACE FUNCTION VALIDATE_BUYER_CONTEXT(
+    p_buyer_customer_id UUID,
+    p_buyer_org_id UUID,
+    p_buyer_member_id UUID
+) RETURNS VOID AS
 $$
 BEGIN
 IF NOT EXISTS (
@@ -412,10 +412,10 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_checkout_session_buyer_context() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_CHECKOUT_SESSION_BUYER_CONTEXT() RETURNS TRIGGER AS
 $$
 BEGIN
-PERFORM validate_buyer_context(
+PERFORM VALIDATE_BUYER_CONTEXT(
     NEW.buyer_customer_id,
     NEW.buyer_org_id,
     NEW.buyer_member_id
@@ -429,10 +429,10 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_order_orgs() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_ORDER_ORGS() RETURNS TRIGGER AS
 $$
 BEGIN
-PERFORM validate_buyer_context(
+PERFORM VALIDATE_BUYER_CONTEXT(
     NEW.buyer_customer_id,
     NEW.buyer_org_id,
     NEW.buyer_member_id
@@ -472,7 +472,7 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_inventory_reservation_orgs() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_INVENTORY_RESERVATION_ORGS() RETURNS TRIGGER AS
 $$
 BEGIN
 IF NOT EXISTS (
@@ -521,7 +521,7 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_inventory_reservation_item() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_INVENTORY_RESERVATION_ITEM() RETURNS TRIGGER AS
 $$
 DECLARE
 order_item_quantity INTEGER;
@@ -571,7 +571,7 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_payment_buyer_org() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_PAYMENT_BUYER_ORG() RETURNS TRIGGER AS
 $$
 BEGIN
 IF NOT EXISTS (
@@ -594,7 +594,7 @@ $$
 LANGUAGE plpgsql;
 
 CREATE
-OR REPLACE FUNCTION validate_order_item_merchant_refs() RETURNS TRIGGER AS
+OR REPLACE FUNCTION VALIDATE_ORDER_ITEM_MERCHANT_REFS() RETURNS TRIGGER AS
 $$
 DECLARE
 order_merchant_org_id UUID;
@@ -665,25 +665,25 @@ CREATE TRIGGER trg_carts_validate_buyer_org BEFORE
 INSERT
     OR
 UPDATE
-    OF buyer_org_id ON carts FOR EACH ROW EXECUTE FUNCTION validate_cart_buyer_org();
+    OF buyer_org_id ON carts FOR EACH ROW EXECUTE FUNCTION VALIDATE_CART_BUYER_ORG();
 
 CREATE TRIGGER trg_cart_shop_groups_validate_merchant_org BEFORE
 INSERT
     OR
 UPDATE
-    OF merchant_org_id ON cart_shop_groups FOR EACH ROW EXECUTE FUNCTION validate_cart_shop_group_merchant_org();
+    OF merchant_org_id ON cart_shop_groups FOR EACH ROW EXECUTE FUNCTION VALIDATE_CART_SHOP_GROUP_MERCHANT_ORG();
 
 CREATE TRIGGER trg_carts_updated_at BEFORE
 UPDATE
-    ON carts FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON carts FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_cart_shop_groups_updated_at BEFORE
 UPDATE
-    ON cart_shop_groups FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON cart_shop_groups FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_cart_items_updated_at BEFORE
 UPDATE
-    ON cart_items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON cart_items FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_checkout_sessions_validate_buyer_context BEFORE
 INSERT
@@ -691,7 +691,7 @@ INSERT
 UPDATE
     OF buyer_customer_id,
     buyer_org_id,
-    buyer_member_id ON checkout_sessions FOR EACH ROW EXECUTE FUNCTION validate_checkout_session_buyer_context();
+    buyer_member_id ON checkout_sessions FOR EACH ROW EXECUTE FUNCTION VALIDATE_CHECKOUT_SESSION_BUYER_CONTEXT();
 
 CREATE TRIGGER trg_orders_validate_orgs BEFORE
 INSERT
@@ -701,7 +701,7 @@ UPDATE
     merchant_org_id,
     buyer_customer_id,
     buyer_org_id,
-    buyer_member_id ON orders FOR EACH ROW EXECUTE FUNCTION validate_order_orgs();
+    buyer_member_id ON orders FOR EACH ROW EXECUTE FUNCTION VALIDATE_ORDER_ORGS();
 
 CREATE TRIGGER trg_inventory_reservations_validate_orgs BEFORE
 INSERT
@@ -710,7 +710,7 @@ UPDATE
     OF checkout_session_id,
     order_id,
     buyer_org_id,
-    merchant_org_id ON inventory_reservations FOR EACH ROW EXECUTE FUNCTION validate_inventory_reservation_orgs();
+    merchant_org_id ON inventory_reservations FOR EACH ROW EXECUTE FUNCTION VALIDATE_INVENTORY_RESERVATION_ORGS();
 
 CREATE TRIGGER trg_inventory_reservation_items_validate BEFORE
 INSERT
@@ -720,26 +720,26 @@ UPDATE
     order_item_id,
     product_variant_id,
     warehouse_id,
-    quantity ON inventory_reservation_items FOR EACH ROW EXECUTE FUNCTION validate_inventory_reservation_item();
+    quantity ON inventory_reservation_items FOR EACH ROW EXECUTE FUNCTION VALIDATE_INVENTORY_RESERVATION_ITEM();
 
 CREATE TRIGGER trg_payments_validate_buyer_org BEFORE
 INSERT
     OR
 UPDATE
     OF checkout_session_id,
-    buyer_org_id ON payments FOR EACH ROW EXECUTE FUNCTION validate_payment_buyer_org();
+    buyer_org_id ON payments FOR EACH ROW EXECUTE FUNCTION VALIDATE_PAYMENT_BUYER_ORG();
 
 CREATE TRIGGER trg_checkout_sessions_updated_at BEFORE
 UPDATE
-    ON checkout_sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON checkout_sessions FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_orders_updated_at BEFORE
 UPDATE
-    ON orders FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON orders FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_payments_updated_at BEFORE
 UPDATE
-    ON payments FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+    ON payments FOR EACH ROW EXECUTE FUNCTION SET_UPDATED_AT();
 
 CREATE TRIGGER trg_order_items_validate_merchant_refs BEFORE
 INSERT
@@ -748,7 +748,7 @@ UPDATE
     OF order_id,
     product_id,
     product_variant_id,
-    warehouse_id ON order_items FOR EACH ROW EXECUTE FUNCTION validate_order_item_merchant_refs();
+    warehouse_id ON order_items FOR EACH ROW EXECUTE FUNCTION VALIDATE_ORDER_ITEM_MERCHANT_REFS();
 
 -- +goose StatementEnd
 -- +goose Down
@@ -781,23 +781,23 @@ DROP TRIGGER IF EXISTS trg_cart_shop_groups_validate_merchant_org ON cart_shop_g
 
 DROP TRIGGER IF EXISTS trg_carts_validate_buyer_org ON carts;
 
-DROP FUNCTION IF EXISTS validate_order_item_merchant_refs() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_ORDER_ITEM_MERCHANT_REFS() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_payment_buyer_org() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_PAYMENT_BUYER_ORG() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_inventory_reservation_item() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_INVENTORY_RESERVATION_ITEM() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_inventory_reservation_orgs() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_INVENTORY_RESERVATION_ORGS() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_order_orgs() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_ORDER_ORGS() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_checkout_session_buyer_context() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_CHECKOUT_SESSION_BUYER_CONTEXT() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_buyer_context(uuid, uuid, uuid) CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_BUYER_CONTEXT(UUID, UUID, UUID) CASCADE;
 
-DROP FUNCTION IF EXISTS validate_cart_shop_group_merchant_org() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_CART_SHOP_GROUP_MERCHANT_ORG() CASCADE;
 
-DROP FUNCTION IF EXISTS validate_cart_buyer_org() CASCADE;
+DROP FUNCTION IF EXISTS VALIDATE_CART_BUYER_ORG() CASCADE;
 
 DROP TABLE IF EXISTS payment_transactions;
 

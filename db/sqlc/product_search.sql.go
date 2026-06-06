@@ -32,7 +32,7 @@ SELECT
         ),
         'B'
     ) ||
-    setweight(to_tsvector('simple', COALESCE(attribute_doc.values, '')), 'B') ||
+    setweight(to_tsvector('simple', COALESCE(attribute_doc.attribute_values, '')), 'B') ||
     setweight(to_tsvector('simple', COALESCE(attribute_doc.labels, '')), 'B') ||
     setweight(
         jsonb_to_tsvector(
@@ -58,7 +58,7 @@ FROM
     ) variant_doc ON TRUE
     LEFT JOIN LATERAL (
         SELECT
-            string_agg(DISTINCT av.value, ' ') AS values,
+            string_agg(DISTINCT av.value, ' ') AS attribute_values,
             string_agg(DISTINCT av.label, ' ') AS labels
         FROM
             product_variants pv
