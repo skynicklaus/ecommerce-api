@@ -574,20 +574,28 @@ type VariantResponse struct {
 	Asset          *AssetResponse      `json:"asset,omitempty"`
 }
 
+type ProductCategoryResponse struct {
+	ID       uuid.UUID  `json:"id"`
+	ParentID *uuid.UUID `json:"parentId,omitempty"`
+	Name     string     `json:"name"`
+	Slug     string     `json:"slug"`
+}
+
 type ProductDetailsResponse struct {
-	ID             uuid.UUID         `json:"id"`
-	OrganizationID uuid.UUID         `json:"organizationId"`
-	CategoryID     uuid.UUID         `json:"categoryId"`
-	Name           string            `json:"name"`
-	Slug           string            `json:"slug"`
-	Description    json.RawMessage   `json:"description"    swaggertype:"object"`
-	Status         string            `json:"status"`
-	Specification  json.RawMessage   `json:"specification"  swaggertype:"object"`
-	IsFeatured     bool              `json:"isFeatured"`
-	CreatedAt      time.Time         `json:"createdAt"`
-	UpdatedAt      time.Time         `json:"updatedAt"`
-	Assets         []AssetResponse   `json:"assets"`
-	Variants       []VariantResponse `json:"variants"`
+	ID             uuid.UUID                 `json:"id"`
+	OrganizationID uuid.UUID                 `json:"organizationId"`
+	CategoryID     uuid.UUID                 `json:"categoryId"`
+	CategoryPath   []ProductCategoryResponse `json:"categoryPath,omitempty"`
+	Name           string                    `json:"name"`
+	Slug           string                    `json:"slug"`
+	Description    json.RawMessage           `json:"description"                swaggertype:"object"`
+	Status         string                    `json:"status"`
+	Specification  json.RawMessage           `json:"specification"              swaggertype:"object"`
+	IsFeatured     bool                      `json:"isFeatured"`
+	CreatedAt      time.Time                 `json:"createdAt"`
+	UpdatedAt      time.Time                 `json:"updatedAt"`
+	Assets         []AssetResponse           `json:"assets"`
+	Variants       []VariantResponse         `json:"variants"`
 }
 
 // GetActiveProductDetails godoc
@@ -684,6 +692,11 @@ func (h *V1Handler) GetActiveProductDetails( //nolint:funlen
 		return fmt.Errorf("failed to fetch attributes: %w", err)
 	}
 
+	categoryPath, err := h.productCategoryPath(ctx, categoryID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch category path: %w", err)
+	}
+
 	urlMap := h.resolveAssetURLsParallel(ctx, assets)
 
 	attrMap := make(map[uuid.UUID][]AttributeResponse, len(attrs))
@@ -740,6 +753,7 @@ func (h *V1Handler) GetActiveProductDetails( //nolint:funlen
 		ID:             productID,
 		OrganizationID: orgID,
 		CategoryID:     categoryID,
+		CategoryPath:   categoryPath,
 		Name:           name,
 		Slug:           slug,
 		Description:    json.RawMessage(description),
@@ -753,6 +767,28 @@ func (h *V1Handler) GetActiveProductDetails( //nolint:funlen
 	}
 
 	return WriteJSON(w, http.StatusOK, res)
+}
+
+func (h *V1Handler) productCategoryPath(
+	ctx context.Context,
+	categoryID uuid.UUID,
+) ([]ProductCategoryResponse, error) {
+	categories, err := h.store.ListCategoryPath(ctx, categoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make([]ProductCategoryResponse, len(categories))
+	for i, category := range categories {
+		resp[i] = ProductCategoryResponse{
+			ID:       category.ID,
+			ParentID: category.ParentID,
+			Name:     category.Name,
+			Slug:     category.Slug,
+		}
+	}
+
+	return resp, nil
 }
 
 type ListProductsResponse struct {
@@ -1513,6 +1549,11 @@ func (h *V1Handler) GetMerchantProductDetails( //nolint:funlen
 		return fmt.Errorf("failed to fetch attributes: %w", err)
 	}
 
+	categoryPath, err := h.productCategoryPath(ctx, categoryID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch category path: %w", err)
+	}
+
 	urlMap := h.resolveAssetURLsParallel(ctx, assets)
 
 	attrMap := make(map[uuid.UUID][]AttributeResponse, len(attrs))
@@ -1569,6 +1610,7 @@ func (h *V1Handler) GetMerchantProductDetails( //nolint:funlen
 		ID:             productID,
 		OrganizationID: organizationID,
 		CategoryID:     categoryID,
+		CategoryPath:   categoryPath,
 		Name:           name,
 		Slug:           slug,
 		Description:    json.RawMessage(description),
