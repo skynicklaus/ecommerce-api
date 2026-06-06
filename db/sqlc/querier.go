@@ -118,6 +118,7 @@ type Querier interface {
 	GetWarehouseVariantInventory(ctx context.Context, arg GetWarehouseVariantInventoryParams) (Inventory, error)
 	ListActiveProductsAfter(ctx context.Context, arg ListActiveProductsAfterParams) ([]ListActiveProductsAfterRow, error)
 	ListBuyerOrders(ctx context.Context, arg ListBuyerOrdersParams) ([]Order, error)
+	ListCategoryPath(ctx context.Context, id uuid.UUID) ([]ListCategoryPathRow, error)
 	ListExpiredActiveCheckoutSessionsForUpdate(ctx context.Context, pageLimit int32) ([]CheckoutSession, error)
 	ListExpiredActiveInventoryReservationsForUpdate(ctx context.Context, pageLimit int32) ([]InventoryReservation, error)
 	ListInventoryByOrganization(ctx context.Context, arg ListInventoryByOrganizationParams) ([]ListInventoryByOrganizationRow, error)

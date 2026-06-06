@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -96,4 +97,95 @@ func (q *Queries) GetCategoryByID(ctx context.Context, id uuid.UUID) (Category, 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const listCategoryPath = `-- name: ListCategoryPath :many
+WITH RECURSIVE ancestors AS (
+    SELECT
+        c.id,
+        c.organization_id,
+        c.parent_id,
+        c.name,
+        c.slug,
+        c.description,
+        c.sort_order,
+        c.is_active,
+        c.created_at,
+        0 AS depth
+    FROM
+        categories c
+    WHERE
+        c.id = $1
+    UNION ALL
+    SELECT
+        c.id,
+        c.organization_id,
+        c.parent_id,
+        c.name,
+        c.slug,
+        c.description,
+        c.sort_order,
+        c.is_active,
+        c.created_at,
+        a.depth + 1 AS depth
+    FROM
+        categories c
+        JOIN ancestors a ON a.parent_id = c.id
+)
+SELECT
+    id,
+    organization_id,
+    parent_id,
+    name,
+    slug,
+    description,
+    sort_order,
+    is_active,
+    created_at
+FROM
+    ancestors
+ORDER BY
+    depth DESC
+`
+
+type ListCategoryPathRow struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID *uuid.UUID `json:"organization_id"`
+	ParentID       *uuid.UUID `json:"parent_id"`
+	Name           string     `json:"name"`
+	Slug           string     `json:"slug"`
+	Description    *string    `json:"description"`
+	SortOrder      int16      `json:"sort_order"`
+	IsActive       bool       `json:"is_active"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+func (q *Queries) ListCategoryPath(ctx context.Context, id uuid.UUID) ([]ListCategoryPathRow, error) {
+	rows, err := q.db.Query(ctx, listCategoryPath, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCategoryPathRow{}
+	for rows.Next() {
+		var i ListCategoryPathRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ParentID,
+			&i.Name,
+			&i.Slug,
+			&i.Description,
+			&i.SortOrder,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
