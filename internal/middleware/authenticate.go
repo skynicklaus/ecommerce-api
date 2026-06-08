@@ -47,6 +47,12 @@ const (
 func (m *Middleware) RequireService(
 	requiredService util.SessionService,
 ) func(http.Handler) http.Handler {
+	return m.RequireAnyService(requiredService)
+}
+
+func (m *Middleware) RequireAnyService(
+	allowedServices ...util.SessionService,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
@@ -114,7 +120,8 @@ func (m *Middleware) RequireService(
 			}
 
 			// Service boundary check: a buyer token must not reach merchant routes.
-			if session.Service != string(requiredService) {
+			sessionService := util.SessionService(session.Service)
+			if !sessionServiceAllowed(sessionService, allowedServices) {
 				apierror.Write(
 					w,
 					apierror.NewAPIError(
@@ -131,7 +138,7 @@ func (m *Middleware) RequireService(
 				ctx,
 				session.IdentityID,
 				session.IdentityType,
-				requiredService,
+				sessionService,
 				session.ActiveOrganizationID,
 			)
 			if resolveErr != nil {
@@ -187,6 +194,18 @@ func (m *Middleware) RequireService(
 	}
 }
 
+func sessionServiceAllowed(
+	sessionService util.SessionService,
+	allowedServices []util.SessionService,
+) bool {
+	for _, allowedService := range allowedServices {
+		if sessionService == allowedService {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Middleware) resolveIdentity(
 	ctx context.Context,
 	identityID uuid.UUID,
@@ -205,6 +224,7 @@ func (m *Middleware) resolveIdentity(
 			var cached IdentityContext
 			if json.Unmarshal(cachedBytes, &cached) == nil {
 				cached.Service = service
+				cached.OrganizationID = resolvedOrgID
 				return cached, nil
 			}
 		}

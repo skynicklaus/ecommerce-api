@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS sessions (
         service IN (
             'admin_panel',
             'merchant_panel',
+            'merchant_onboarding',
             'buyer_platform'
         )
     )

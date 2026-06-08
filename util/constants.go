@@ -12,9 +12,10 @@ const (
 type SessionService string
 
 const (
-	SessionServiceAdminPanel    SessionService = "admin_panel"
-	SessionServiceMerchantPanel SessionService = "merchant_panel"
-	SessionServiceBuyerPlatform SessionService = "buyer_platform"
+	SessionServiceAdminPanel         SessionService = "admin_panel"
+	SessionServiceMerchantPanel      SessionService = "merchant_panel"
+	SessionServiceMerchantOnboarding SessionService = "merchant_onboarding"
+	SessionServiceBuyerPlatform      SessionService = "buyer_platform"
 )
 
 // SessionTTL is the lifetime of a newly created or renewed session.
@@ -33,7 +34,7 @@ func AbsoluteSessionMax(service SessionService) time.Duration {
 	switch service {
 	case SessionServiceAdminPanel:
 		return SessionAbsoluteMaxAdmin
-	case SessionServiceMerchantPanel:
+	case SessionServiceMerchantPanel, SessionServiceMerchantOnboarding:
 		return SessionAbsoluteMaxMerchant
 	case SessionServiceBuyerPlatform:
 		return SessionAbsoluteMaxBuyer

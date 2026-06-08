@@ -148,7 +148,7 @@ func (h *V1Handler) LoginCustomer(w http.ResponseWriter, r *http.Request) error 
 //	@Failure		500		{object}	apierror.APIError
 //	@Router			/auth/merchant/login [post]
 func (h *V1Handler) LoginMerchant(w http.ResponseWriter, r *http.Request) error {
-	return h.handleUserLogin(w, r, util.SessionServiceMerchantPanel)
+	return h.handleMerchantLogin(w, r)
 }
 
 // LoginAdmin godoc
@@ -234,6 +234,104 @@ func (h *V1Handler) handleUserLogin(
 			SessionID:      sessionID,
 		},
 	})
+}
+
+func (h *V1Handler) handleMerchantLogin(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	var req LoginRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		return err
+	}
+	if err := h.validate(&req); err != nil {
+		return apierror.ErrValidation(err)
+	}
+
+	res, err := h.store.GetUserWithCredential(ctx, req.Email)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			_ = password.CheckPassword(req.Password, loginTimingSentinel)
+			return apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+		}
+		return err
+	}
+
+	if res.HashedPassword == nil {
+		_ = password.CheckPassword(req.Password, loginTimingSentinel)
+		return apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+	}
+
+	if checkErr := password.CheckPassword(req.Password, *res.HashedPassword); checkErr != nil {
+		if !errors.Is(checkErr, password.ErrMismatchedHashAndPassword) {
+			return fmt.Errorf("password check failed: %w", checkErr)
+		}
+		return apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
+	}
+
+	orgID, service, orgErr := h.merchantLoginContext(ctx, res.IdentityID)
+	if orgErr != nil {
+		return orgErr
+	}
+
+	token, expires, sessionID, dbErr := h.createStatefulSession(
+		ctx,
+		res.IdentityID,
+		orgID,
+		service,
+		r,
+	)
+	if dbErr != nil {
+		return dbErr
+	}
+
+	organizationID := uuid.Nil
+	if orgID != nil {
+		organizationID = *orgID
+	}
+
+	return WriteJSON(w, http.StatusOK, LoginResponse{
+		Token:     token,
+		ExpiresAt: expires,
+		Identity: middleware.IdentityContext{
+			IdentityID:     res.IdentityID,
+			Type:           string(util.IdentityUser),
+			ActorID:        res.ID,
+			OrganizationID: organizationID,
+			Name:           res.Name,
+			Email:          res.Email,
+			Service:        service,
+			SessionID:      sessionID,
+		},
+	})
+}
+
+func (h *V1Handler) merchantLoginContext(
+	ctx context.Context,
+	identityID uuid.UUID,
+) (*uuid.UUID, util.SessionService, error) {
+	member, memberErr := h.store.GetMemberByIdentityID(ctx, identityID)
+	if memberErr != nil {
+		if errors.Is(memberErr, db.ErrNotFound) {
+			return nil, util.SessionServiceMerchantOnboarding, nil
+		}
+		return nil, "", fmt.Errorf("failed to resolve membership: %w", memberErr)
+	}
+
+	org, orgErr := h.store.GetOrganizationByID(ctx, member.OrganizationID)
+	if orgErr != nil {
+		if errors.Is(orgErr, db.ErrNotFound) {
+			return nil, "", apierror.NewAPIError(
+				http.StatusUnauthorized,
+				errors.New("invalid credentials"),
+			)
+		}
+		return nil, "", fmt.Errorf("failed to resolve organization: %w", orgErr)
+	}
+
+	if organizationAllowedForService(org.Type, util.SessionServiceMerchantPanel) {
+		return &member.OrganizationID, util.SessionServiceMerchantPanel, nil
+	}
+
+	return nil, "", apierror.NewAPIError(http.StatusUnauthorized, errors.New("invalid credentials"))
 }
 
 func (h *V1Handler) authorizedOrganizationForUserLogin(

@@ -75,8 +75,10 @@ func TestAuthFlows_Integration(t *testing.T) {
 
 	// Protected Merchant Group
 	r.Group(func(r chi.Router) {
-		r.Use(midware.RequireService(util.SessionServiceMerchantPanel))
-		r.Use(midware.ValidateOrganization)
+		r.Use(midware.RequireAnyService(
+			util.SessionServiceMerchantPanel,
+			util.SessionServiceMerchantOnboarding,
+		))
 		r.Post("/v1/auth/merchant/logout", makeTestHandler(h.Logout))
 		r.Get("/v1/auth/merchant/me", makeTestHandler(h.GetMe))
 	})
@@ -168,6 +170,37 @@ func TestAuthFlows_Integration(t *testing.T) {
 	_, err = store.CreateMember(ctx, db.CreateMemberParams{
 		IdentityID:     merchIdent.ID,
 		OrganizationID: org.ID,
+	})
+	require.NoError(t, err)
+
+	// C. SEED MERCHANT APPLICANT USER WITHOUT ORGANIZATION MEMBERSHIP
+	applicantEmail := "merchant-applicant-" + uuid.New().String()[:8] + "@test.com"
+	applicantIdent, err := store.CreateIdentity(ctx, string(util.IdentityUser))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = connPool.Exec(
+			context.Background(),
+			"DELETE FROM identities WHERE id = $1",
+			applicantIdent.ID,
+		)
+	})
+	applicantUser, err := store.CreateUser(ctx, db.CreateUserParams{
+		IdentityID: applicantIdent.ID,
+		Name:       "Pending Merchant",
+		Email:      applicantEmail,
+	})
+	require.NoError(t, err)
+	_, err = store.CreateUserAccount(ctx, db.CreateUserAccountParams{
+		UserID:                applicantUser.ID,
+		AccountID:             "credential-" + uuid.New().String()[:8],
+		ProviderID:            "credential",
+		AccessToken:           nil,
+		RefreshToken:          nil,
+		AccessTokenExpiresAt:  nil,
+		RefreshTokenExpiresAt: nil,
+		Scope:                 nil,
+		IDToken:               nil,
+		HashedPassword:        &hashedPass,
 	})
 	require.NoError(t, err)
 
@@ -277,6 +310,39 @@ func TestAuthFlows_Integration(t *testing.T) {
 		custRR := httptest.NewRecorder()
 		r.ServeHTTP(custRR, custReq)
 		require.Equal(t, http.StatusForbidden, custRR.Code)
+	})
+
+	t.Run("Merchant Applicant Login Success", func(t *testing.T) {
+		reqBody, _ := json.Marshal(LoginRequest{
+			Email:    applicantEmail,
+			Password: pass,
+		})
+		req, _ := http.NewRequest("POST", "/v1/auth/merchant/login", bytes.NewBuffer(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+
+		r.ServeHTTP(rr, req)
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		var resp LoginResponse
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotEmpty(t, resp.Token)
+		require.Equal(t, string(util.IdentityUser), resp.Identity.Type)
+		require.Equal(t, util.SessionServiceMerchantOnboarding, resp.Identity.Service)
+		require.Equal(t, uuid.Nil, resp.Identity.OrganizationID)
+
+		meReq, _ := http.NewRequest("GET", "/v1/auth/merchant/me", nil)
+		meReq.Header.Set("Authorization", "Bearer "+resp.Token)
+		meRR := httptest.NewRecorder()
+		r.ServeHTTP(meRR, meReq)
+		require.Equal(t, http.StatusOK, meRR.Code)
+
+		var meResp middleware.IdentityContext
+		err = json.Unmarshal(meRR.Body.Bytes(), &meResp)
+		require.NoError(t, err)
+		require.Equal(t, util.SessionServiceMerchantOnboarding, meResp.Service)
+		require.Equal(t, uuid.Nil, meResp.OrganizationID)
 	})
 
 	t.Run("Login Failure Bad Pass", func(t *testing.T) {

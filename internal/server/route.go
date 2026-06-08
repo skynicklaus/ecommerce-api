@@ -62,6 +62,7 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/customer", s.make(v1Handler.CustomerCredentialRegistration))
+		r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 
 		// Open login routes.
 		r.Post("/auth/customer/login", s.make(v1Handler.LoginCustomer))
@@ -94,10 +95,13 @@ func (s *Server) RegisterRoutes() http.Handler {
 		})
 
 		// Protected Merchant account/session routes.
-		// These require a merchant-panel session but do not require an active organization,
+		// These require a merchant session but do not require an active organization,
 		// so pending merchants can still inspect their account state and manage sessions.
 		r.Group(func(r chi.Router) {
-			r.Use(midware.RequireService(util.SessionServiceMerchantPanel))
+			r.Use(midware.RequireAnyService(
+				util.SessionServiceMerchantPanel,
+				util.SessionServiceMerchantOnboarding,
+			))
 
 			r.Post("/auth/merchant/logout", s.make(v1Handler.Logout))
 			r.Get("/auth/merchant/me", s.make(v1Handler.GetMe))
@@ -139,7 +143,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 			// User creation is admin-gated — first admin is bootstrapped via migrate.
 			r.Post("/users/platform", s.make(v1Handler.PlatformUserCredentialRegistration))
-			r.Post("/users/merchant", s.make(v1Handler.UserCredentialRegistration))
 		})
 	})
 
